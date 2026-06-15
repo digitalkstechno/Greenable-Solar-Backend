@@ -15,5 +15,8 @@ router.use("/team", require("./team"));
 router.use("/organization", require("./organization"));
 router.use("/task", require("./task"));
 router.use("/notification", require("./notification"));
+router.use("/category", require("./category"));
+router.use("/product", require("./product"));
+router.use("/stock", require("./stockTransaction"));
 
 module.exports = router;

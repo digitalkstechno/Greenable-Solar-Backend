@@ -17,15 +17,8 @@ exports.createLead = async (req, res) => {
   try {
     const leadData = { ...req.body };
 
-    // Handle leadLabel[] from FormData
-    if (req.body["leadLabel[]"]) {
-      leadData.leadLabel = Array.isArray(req.body["leadLabel[]"]) ? req.body["leadLabel[]"] : [req.body["leadLabel[]"]];
-      delete leadData["leadLabel[]"];
-    }
-
     // Sanitize ObjectIds
     leadData.leadStatus = sanitizeObjectId(leadData.leadStatus);
-    leadData.leadSource = sanitizeObjectId(leadData.leadSource);
     leadData.assignedTo = sanitizeObjectId(leadData.assignedTo);
 
 
@@ -41,7 +34,7 @@ exports.createLead = async (req, res) => {
 
     await incrementCount({
       statusId: leadDetails.leadStatus,
-      sourceId: leadDetails.leadSource,
+      
     });
 
     if (leadDetails.assignedTo && (!req.user || String(leadDetails.assignedTo) !== String(req.user._id))) {
@@ -80,7 +73,7 @@ exports.fetchAllLeads = async (req, res) => {
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
 
-    const { search = "", status, source, staff, date, from, to } = req.query;
+    const { search = "", status, staff, date, from, to } = req.query;
 
     // 🔥 BASE QUERY
     const query = {};
@@ -93,8 +86,8 @@ exports.fetchAllLeads = async (req, res) => {
         { fullName: { $regex: search, $options: "i" } },
         { email: { $regex: search, $options: "i" } },
         { phone: { $regex: search, $options: "i" } },
-        { companyName: { $regex: search, $options: "i" } },
-        { priority: { $regex: search, $options: "i" } },
+        { kwRequirement: { $regex: search, $options: "i" } },
+        { discomName: { $regex: search, $options: "i" } },
       ];
     }
 
@@ -110,17 +103,7 @@ exports.fetchAllLeads = async (req, res) => {
       }
     }
 
-    /* =====================
-       SOURCE FILTER
-    ====================== */
-    if (source) {
-      const sourceArr = source.split(',').map(s => s.trim()).filter(Boolean);
-      if (sourceArr.length === 1) {
-        query.leadSource = sourceArr[0];
-      } else if (sourceArr.length > 1) {
-        query.leadSource = { $in: sourceArr };
-      }
-    }
+
 
     /* =====================
        STAFF FILTER
@@ -169,8 +152,6 @@ exports.fetchAllLeads = async (req, res) => {
       .limit(limit)
       .sort({ createdAt: -1 })
       .populate("leadStatus")
-      .populate("leadSource")
-      .populate("leadLabel")
       .populate("assignedTo")
       .populate("followUps.staff", "fullName email");
 
@@ -203,9 +184,7 @@ exports.fetchLeadById = async (req, res) => {
     let LeadId = req.params.id;
     let leadData = await LEAD.findById(LeadId)
       .populate({ path: "leadStatus" })
-      .populate({ path: "leadSource" })
       .populate({ path: "assignedTo" })
-      .populate({ path: "leadLabel" })
       .populate({ path: "followUps.staff", select: "fullName email" });
     if (!leadData) {
       throw new Error("Lead not found");
@@ -248,15 +227,8 @@ exports.leadUpdate = async (req, res) => {
 
     const updateData = { ...req.body };
 
-    // Handle leadLabel[] from FormData
-    if (req.body["leadLabel[]"]) {
-      updateData.leadLabel = Array.isArray(req.body["leadLabel[]"]) ? req.body["leadLabel[]"] : [req.body["leadLabel[]"]];
-      delete updateData["leadLabel[]"];
-    }
-
     // Sanitize ObjectIds
     updateData.leadStatus = sanitizeObjectId(updateData.leadStatus);
-    updateData.leadSource = sanitizeObjectId(updateData.leadSource);
     updateData.assignedTo = sanitizeObjectId(updateData.assignedTo);
 
 
@@ -303,17 +275,11 @@ exports.leadUpdate = async (req, res) => {
       });
     }
 
-    if (updateData.nextFollowupDate === "") {
-      updateData.nextFollowupDate = null;
-    }
-
     let updatedLeads = await LEAD.findByIdAndUpdate(leadId, updateData, {
       new: true,
     })
       .populate("leadStatus")
-      .populate("leadSource")
       .populate("assignedTo")
-      .populate("leadLabel")
       .populate("followUps.staff", "fullName email");
 
     // 🔹 Status change handling
@@ -324,13 +290,7 @@ exports.leadUpdate = async (req, res) => {
       await incrementCount({ statusId: updatedLeads.leadStatus });
     }
 
-    // 🔹 Source change handling
-    if (
-      oldLeads.leadSource?.toString() !== updatedLeads.leadSource?.toString()
-    ) {
-      await decrementCount({ sourceId: oldLeads.leadSource });
-      await incrementCount({ sourceId: updatedLeads.leadSource });
-    }
+
 
     // 🔹 Notification handling for reassignment
     const oldStaff = oldLeads.assignedTo ? String(oldLeads.assignedTo._id || oldLeads.assignedTo) : null;
@@ -382,7 +342,7 @@ exports.leadDelete = async (req, res) => {
 
     await decrementCount({
       statusId: oldLead.leadStatus,
-      sourceId: oldLead.leadSource,
+      
     });
 
     await LEAD.findByIdAndDelete(leadId);
@@ -401,7 +361,7 @@ exports.leadDelete = async (req, res) => {
 
 exports.fetchLeadsForKanban = async (req, res) => {
   try {
-    const { search, status, source, staff, date } = req.query;
+    const { search, status, staff, date } = req.query;
 
     const match = {};
     const myOnly = req.query.my === 'true';
@@ -415,8 +375,8 @@ exports.fetchLeadsForKanban = async (req, res) => {
         { fullName: { $regex: search, $options: "i" } },
         { email: { $regex: search, $options: "i" } },
         { phone: { $regex: search, $options: "i" } },
-        { companyName: { $regex: search, $options: "i" } },
-        { priority: { $regex: search, $options: "i" } },
+        { kwRequirement: { $regex: search, $options: "i" } },
+        { discomName: { $regex: search, $options: "i" } },
       ];
     }
 
@@ -430,15 +390,7 @@ exports.fetchLeadsForKanban = async (req, res) => {
       }
     }
 
-    // 🔥 SOURCE FILTER (handle comma-separated values)
-    if (source) {
-      const sourceArr = source.split(',').filter(s => s.trim());
-      if (sourceArr.length === 1) {
-        match.leadSource = sourceArr[0];
-      } else if (sourceArr.length > 1) {
-        match.leadSource = { $in: sourceArr };
-      }
-    }
+
 
     // 🔥 STAFF FILTER (handle comma-separated values)
     if (staff) {
@@ -474,8 +426,6 @@ exports.fetchLeadsForKanban = async (req, res) => {
         const leadMatch = { ...match, leadStatus: status._id };
         const leads = await LEAD.find(leadMatch)
           .populate("leadStatus")
-          .populate("leadSource")
-          .populate("leadLabel")
           .populate("assignedTo")
           .sort({ createdAt: -1 })
           .limit(10);
@@ -503,7 +453,7 @@ exports.fetchLeadsForKanban = async (req, res) => {
 
 exports.fetchKanbanLeadsByStatus = async (req, res) => {
   try {
-    const { statusId, search, source, staff, date, page = 1, limit = 10 } = req.query;
+    const { statusId, search, staff, date, page = 1, limit = 10 } = req.query;
     const match = { leadStatus: statusId };
     const myOnly = req.query.my === 'true';
 
@@ -516,15 +466,11 @@ exports.fetchKanbanLeadsByStatus = async (req, res) => {
         { fullName: { $regex: search, $options: "i" } },
         { email: { $regex: search, $options: "i" } },
         { phone: { $regex: search, $options: "i" } },
-        { companyName: { $regex: search, $options: "i" } },
+        { kwRequirement: { $regex: search, $options: "i" } },
       ];
     }
 
-    if (source) {
-      const sourceArr = source.split(',').filter(s => s.trim());
-      if (sourceArr.length === 1) match.leadSource = sourceArr[0];
-      else if (sourceArr.length > 1) match.leadSource = { $in: sourceArr };
-    }
+
 
     if (staff) {
       const staffArr = staff.split(',').filter(s => s.trim());
@@ -543,8 +489,6 @@ exports.fetchKanbanLeadsByStatus = async (req, res) => {
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const leads = await LEAD.find(match)
       .populate("leadStatus")
-      .populate("leadSource")
-      .populate("leadLabel")
       .populate("assignedTo")
       .sort({ createdAt: -1 })
       .skip(skip)
@@ -605,7 +549,7 @@ exports.updateKanbanStatus = async (req, res) => {
 
 exports.getKanbanCounts = async (req, res) => {
   try {
-    const { search, status, source, staff, date } = req.query;
+    const { search, status, staff, date } = req.query;
 
     const match = {};
     const myOnly = req.query.my === 'true';
@@ -619,20 +563,12 @@ exports.getKanbanCounts = async (req, res) => {
         { fullName: { $regex: search, $options: "i" } },
         { email: { $regex: search, $options: "i" } },
         { phone: { $regex: search, $options: "i" } },
-        { companyName: { $regex: search, $options: "i" } },
-        { priority: { $regex: search, $options: "i" } },
+        { kwRequirement: { $regex: search, $options: "i" } },
+        { discomName: { $regex: search, $options: "i" } },
       ];
     }
 
-    // 🔥 SOURCE FILTER (handle comma-separated values)
-    if (source) {
-      const sourceArr = source.split(',').filter(s => s.trim());
-      if (sourceArr.length === 1) {
-        match.leadSource = sourceArr[0];
-      } else if (sourceArr.length > 1) {
-        match.leadSource = { $in: sourceArr };
-      }
-    }
+
 
     // 🔥 STAFF FILTER (handle comma-separated values)
     if (staff) {
@@ -697,7 +633,7 @@ exports.getLeadCountSummary = async (req, res) => {
 
     const allStatuses = await LeadStatus.find().select("_id name").sort({ order: 1 });
 
-    const { search, source, staff, date, from, to } = req.query;
+    const { search, staff, date, from, to } = req.query;
 
     const baseMatch = {};
     const myOnly = req.query.my === 'true';
@@ -711,20 +647,11 @@ exports.getLeadCountSummary = async (req, res) => {
         { fullName: { $regex: search, $options: "i" } },
         { email: { $regex: search, $options: "i" } },
         { phone: { $regex: search, $options: "i" } },
-        { companyName: { $regex: search, $options: "i" } },
-        { priority: { $regex: search, $options: "i" } },
+        { kwRequirement: { $regex: search, $options: "i" } },
+        { discomName: { $regex: search, $options: "i" } },
       ];
     }
 
-    // 🔥 SOURCE FILTER (handle comma-separated values)
-    if (source) {
-      const sourceArr = source.split(',').filter(s => s.trim());
-      if (sourceArr.length === 1) {
-        baseMatch.leadSource = sourceArr[0];
-      } else if (sourceArr.length > 1) {
-        baseMatch.leadSource = { $in: sourceArr };
-      }
-    }
 
     // 🔥 STAFF FILTER (handle comma-separated values)
     if (staff) {
@@ -944,16 +871,6 @@ exports.getUpcomingFollowups = async (req, res) => {
       },
       { $unwind: { path: "$assignedTo", preserveNullAndEmptyArrays: true } },
 
-      // populate leadSource
-      {
-        $lookup: {
-          from: "leadsources",
-          localField: "leadSource",
-          foreignField: "_id",
-          as: "leadSource",
-        },
-      },
-      { $unwind: { path: "$leadSource", preserveNullAndEmptyArrays: true } },
     ]);
 
     return res.status(200).json({
@@ -1074,16 +991,6 @@ exports.getDueFollowups = async (req, res) => {
       },
       { $unwind: { path: "$assignedTo", preserveNullAndEmptyArrays: true } },
 
-      // populate leadSource
-      {
-        $lookup: {
-          from: "leadsources",
-          localField: "leadSource",
-          foreignField: "_id",
-          as: "leadSource",
-        },
-      },
-      { $unwind: { path: "$leadSource", preserveNullAndEmptyArrays: true } },
     ]);
 
     return res.status(200).json({
@@ -1113,7 +1020,7 @@ exports.getWonLeads = async (req, res) => {
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
 
-    const { search, source, staff, date } = req.query;
+    const { search, staff, date } = req.query;
 
     // First find the Won status
     const wonStatus = await LeadStatus.findOne({ name: { $regex: /^won$/i } }); // Case insensitive
@@ -1146,20 +1053,11 @@ exports.getWonLeads = async (req, res) => {
         { fullName: { $regex: search, $options: "i" } },
         { email: { $regex: search, $options: "i" } },
         { phone: { $regex: search, $options: "i" } },
-        { companyName: { $regex: search, $options: "i" } },
-        { priority: { $regex: search, $options: "i" } },
+        { kwRequirement: { $regex: search, $options: "i" } },
+        { discomName: { $regex: search, $options: "i" } },
       ];
     }
 
-    // 🔥 SOURCE FILTER (handle comma-separated values)
-    if (source) {
-      const sourceArr = source.split(',').filter(s => s.trim());
-      if (sourceArr.length === 1) {
-        query.leadSource = sourceArr[0];
-      } else if (sourceArr.length > 1) {
-        query.leadSource = { $in: sourceArr };
-      }
-    }
 
     // 🔥 STAFF FILTER (handle comma-separated values)
     if (staff) {
@@ -1184,7 +1082,6 @@ exports.getWonLeads = async (req, res) => {
 
     const leads = await LEAD.find(query)
       .populate("leadStatus")
-      .populate("leadSource")
       .populate("assignedTo")
       .populate("leadLabel")
       .sort({ createdAt: -1 })
@@ -1217,7 +1114,7 @@ exports.getLostLeads = async (req, res) => {
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
 
-    const { search, source, staff, date } = req.query;
+    const { search, staff, date } = req.query;
 
     // First find the Lost status
     const lostStatus = await LeadStatus.findOne({ name: { $regex: /^lost$/i } }); // Case insensitive
@@ -1251,15 +1148,11 @@ exports.getLostLeads = async (req, res) => {
         { fullName: { $regex: search, $options: "i" } },
         { email: { $regex: search, $options: "i" } },
         { phone: { $regex: search, $options: "i" } },
-        { companyName: { $regex: search, $options: "i" } },
-        { priority: { $regex: search, $options: "i" } },
+        { kwRequirement: { $regex: search, $options: "i" } },
+        { discomName: { $regex: search, $options: "i" } },
       ];
     }
 
-    // 🔥 SOURCE FILTER
-    if (source) {
-      query.leadSource = source;
-    }
 
     // 🔥 STAFF FILTER
     if (staff) {
@@ -1279,7 +1172,6 @@ exports.getLostLeads = async (req, res) => {
 
     const leads = await LEAD.find(query)
       .populate("leadStatus")
-      .populate("leadSource")
       .populate("assignedTo")
       .populate("leadLabel")
       .sort({ createdAt: -1 })
@@ -1346,7 +1238,7 @@ exports.deleteAttachment = async (req, res) => {
 
 exports.exportLeadsToExcel = async (req, res) => {
   try {
-    const { search = "", status, source, staff, from, to, date } = req.query;
+    const { search = "", status, staff, from, to, date } = req.query;
 
     const query = {};
 
@@ -1356,7 +1248,7 @@ exports.exportLeadsToExcel = async (req, res) => {
         { fullName: { $regex: search, $options: "i" } },
         { email: { $regex: search, $options: "i" } },
         { phone: { $regex: search, $options: "i" } },
-        { companyName: { $regex: search, $options: "i" } },
+        { kwRequirement: { $regex: search, $options: "i" } },
       ];
     }
 
@@ -1366,11 +1258,6 @@ exports.exportLeadsToExcel = async (req, res) => {
       query.leadStatus = arr.length === 1 ? arr[0] : { $in: arr };
     }
 
-    // SOURCE
-    if (source) {
-      const arr = source.split(",").map((s) => s.trim()).filter(Boolean);
-      query.leadSource = arr.length === 1 ? arr[0] : { $in: arr };
-    }
 
     // STAFF
     if (staff) {
@@ -1401,7 +1288,6 @@ exports.exportLeadsToExcel = async (req, res) => {
     const leads = await LEAD.find(query)
       .sort({ createdAt: -1 })
       .populate("leadStatus", "name")
-      .populate("leadSource", "name")
       .populate("assignedTo", "fullName email");
 
     // ── Build Excel ───────────────────────────────────────────────────────────
@@ -1421,7 +1307,7 @@ exports.exportLeadsToExcel = async (req, res) => {
       { header: "Phone", key: "phone", width: 16 },
       { header: "Company", key: "company", width: 22 },
       { header: "Lead Status", key: "status", width: 18 },
-      { header: "Lead Source", key: "source", width: 18 },
+
       { header: "Assigned To", key: "assigned", width: 20 },
       { header: "Priority", key: "priority", width: 12 },
       { header: "Created At", key: "createdAt", width: 18 },
@@ -1452,7 +1338,6 @@ exports.exportLeadsToExcel = async (req, res) => {
         phone: lead.phone || "",
         company: lead.companyName || "",
         status: lead.leadStatus?.name || "",
-        source: lead.leadSource?.name || "",
         assigned: lead.assignedTo?.fullName || "",
         priority: lead.priority || "",
         createdAt: lead.createdAt
@@ -1512,9 +1397,8 @@ exports.exportLeadsToExcel = async (req, res) => {
 // ────────────────────────────────────────────────────────────────────────────
 exports.downloadImportTemplate = async (req, res) => {
   try {
-    const [statuses, sources, labels] = await Promise.all([
+    const [statuses, labels] = await Promise.all([
       LeadStatus.find().select("name").lean(),
-      LeadSource.find().select("name").lean(),
       LeadLabel.find().select("name").lean(),
     ]);
 
@@ -1526,11 +1410,7 @@ exports.downloadImportTemplate = async (req, res) => {
     const statusSheet = workbook.addWorksheet("__statuses", { state: "veryHidden" });
     statusSheet.addRows(statuses.map((s) => [s.name]));
 
-    const sourceSheet = workbook.addWorksheet("__sources", { state: "veryHidden" });
-    sourceSheet.addRows(sources.map((s) => [s.name]));
 
-    const prioritySheet = workbook.addWorksheet("__priorities", { state: "veryHidden" });
-    prioritySheet.addRows([["high"], ["medium"], ["low"]]);
 
     const labelSheet = workbook.addWorksheet("__labels", { state: "veryHidden" });
     labelSheet.addRows(labels.map((l) => [l.name]));
@@ -1545,11 +1425,11 @@ exports.downloadImportTemplate = async (req, res) => {
       { header: "Full Name *",     key: "fullName",    width: 24 },
       { header: "Contact *",       key: "contact",     width: 18 },
       { header: "Email",           key: "email",       width: 28 },
-      { header: "Company Name *",  key: "companyName",  width: 24 },
+      { header: "KW Requirement",  key: "kwRequirement", width: 18 },
+      { header: "Discom Name",     key: "discomName",  width: 20 },
       { header: "Address",         key: "address",     width: 28 },
+      { header: "Location Link",   key: "locationLink", width: 28 },
       { header: "Lead Status *",   key: "leadStatus",  width: 20 },
-      { header: "Lead Source *",   key: "leadSource",  width: 20 },
-      { header: "Priority",        key: "priority",    width: 14 },
       { header: "Note",            key: "note",        width: 30 },
     ];
 
@@ -1573,8 +1453,6 @@ exports.downloadImportTemplate = async (req, res) => {
       companyName: "Acme Corp",
       address:     "123 Main St",
       leadStatus:  statuses[0]?.name || "",
-      leadSource:  sources[0]?.name  || "",
-      priority:    "medium",
       note:        "Sample note",
     });
     sampleRow.eachCell((cell) => {
@@ -1584,11 +1462,9 @@ exports.downloadImportTemplate = async (req, res) => {
     sampleRow.height = 22;
 
     // ── Data validation (dropdowns) for rows 2-1001 ───────────────────────
-    const COL = { leadStatus: 6, leadSource: 7, priority: 8 }; // 1-based col index
+    const COL = { leadStatus: 6 }; // 1-based col index
 
     const statusFormula  = `__statuses!$A$1:$A$${statuses.length || 1}`;
-    const sourceFormula  = `__sources!$A$1:$A$${sources.length || 1}`;
-    const priorityFormula = `__priorities!$A$1:$A$3`;
 
     for (let row = 2; row <= 1001; row++) {
       sheet.getCell(row, COL.leadStatus).dataValidation = {
@@ -1598,22 +1474,6 @@ exports.downloadImportTemplate = async (req, res) => {
         showErrorMessage: true,
         errorTitle: "Invalid Status",
         error: "Please select a valid Lead Status from the dropdown.",
-      };
-      sheet.getCell(row, COL.leadSource).dataValidation = {
-        type: "list",
-        allowBlank: false,
-        formulae: [sourceFormula],
-        showErrorMessage: true,
-        errorTitle: "Invalid Source",
-        error: "Please select a valid Lead Source from the dropdown.",
-      };
-      sheet.getCell(row, COL.priority).dataValidation = {
-        type: "list",
-        allowBlank: true,
-        formulae: [priorityFormula],
-        showErrorMessage: true,
-        errorTitle: "Invalid Priority",
-        error: "Priority must be: high, medium, or low",
       };
     }
 
@@ -1643,16 +1503,12 @@ exports.bulkImportLeads = async (req, res) => {
     }
 
     // Load master data for name→ID lookup
-    const [statuses, sources] = await Promise.all([
+    const [statuses] = await Promise.all([
       LeadStatus.find().lean(),
-      LeadSource.find().lean(),
     ]);
 
     const statusMap = {};
     statuses.forEach((s) => { statusMap[s.name.trim().toLowerCase()] = s._id; });
-
-    const sourceMap = {};
-    sources.forEach((s) => { sourceMap[s.name.trim().toLowerCase()] = s._id; });
 
     // Parse Excel
     const workbook = new ExcelJS.Workbook();
@@ -1683,42 +1539,33 @@ exports.bulkImportLeads = async (req, res) => {
       const fullName    = getCellValue(1);
       const contact     = getCellValue(2);
       const email       = getCellValue(3);
-      const companyName = getCellValue(4);
-      const address     = getCellValue(5);
-      const statusName  = getCellValue(6);
-      const sourceName  = getCellValue(7);
-      const priority    = getCellValue(8).toLowerCase() || "medium";
+      const kwRequirement = getCellValue(4);
+      const discomName  = getCellValue(5);
+      const address     = getCellValue(6);
+      const locationLink = getCellValue(7);
+      const statusName  = getCellValue(8);
       const note        = getCellValue(9);
 
       // Skip completely empty rows
-      if (!fullName && !contact && !companyName && !statusName && !sourceName) return;
+      if (!fullName && !contact && !kwRequirement && !statusName && !discomName) return;
 
       const errors = [];
 
       if (!fullName)    errors.push("Full Name is required");
       if (!contact)     errors.push("Contact is required");
-      if (!companyName) errors.push("Company Name is required");
 
       const statusId = statusName ? statusMap[statusName.toLowerCase()] : null;
       if (!statusName)  errors.push("Lead Status is required");
       else if (!statusId) errors.push(`Lead Status '${statusName}' not found in master`);
 
-      const sourceId = sourceName ? sourceMap[sourceName.toLowerCase()] : null;
-      if (!sourceName)  errors.push("Lead Source is required");
-      else if (!sourceId) errors.push(`Lead Source '${sourceName}' not found in master`);
-
       if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
         errors.push("Invalid email format");
       }
 
-      if (priority && !VALID_PRIORITIES.includes(priority)) {
-        errors.push(`Priority must be high / medium / low (got '${priority}')`);
-      }
-
       if (errors.length > 0) {
-        failedRows.push({ rowNumber, fullName, contact, email, companyName, address, statusName, sourceName, priority, note, errors: errors.join(" | ") });
+        failedRows.push({ rowNumber, fullName, contact, email, kwRequirement, discomName, address, locationLink, statusName, note, errors: errors.join(" | ") });
       } else {
-        successRows.push({ fullName, contact, email: email || undefined, companyName, address: address || undefined, leadStatus: statusId, leadSource: sourceId, priority: priority || "medium", note: note || undefined });
+        successRows.push({ fullName, contact, email: email || undefined, kwRequirement, discomName, address: address || undefined, locationLink: locationLink || undefined, leadStatus: statusId, note: note || undefined });
       }
     });
 
@@ -1728,7 +1575,7 @@ exports.bulkImportLeads = async (req, res) => {
     for (const leadData of successRows) {
       try {
         const lead = await LEAD.create(leadData);
-        await incrementCount({ statusId: lead.leadStatus, sourceId: lead.leadSource });
+        await incrementCount({ statusId: lead.leadStatus });
         imported++;
       } catch (err) {
         // Move to failed if DB validation fails (e.g. duplicate metaLeadId)
@@ -1744,11 +1591,11 @@ exports.bulkImportLeads = async (req, res) => {
         fullName: r.fullName,
         contact: r.contact,
         email: r.email || "",
-        companyName: r.companyName,
+        kwRequirement: r.kwRequirement,
+        discomName: r.discomName,
         address: r.address || "",
+        locationLink: r.locationLink || "",
         statusName: r.leadStatus?.toString() || "",
-        sourceName: r.leadSource?.toString() || "",
-        priority: r.priority,
         note: r.note || "",
         errors: r.errors,
       })),
@@ -1767,11 +1614,11 @@ exports.bulkImportLeads = async (req, res) => {
         { header: "Full Name",      key: "fullName",    width: 22 },
         { header: "Contact",        key: "contact",     width: 16 },
         { header: "Email",          key: "email",       width: 26 },
-        { header: "Company Name",   key: "companyName", width: 22 },
+        { header: "KW Req",         key: "kwRequirement", width: 14 },
+        { header: "Discom Name",    key: "discomName",  width: 20 },
         { header: "Address",        key: "address",     width: 26 },
+        { header: "Location Link",  key: "locationLink", width: 26 },
         { header: "Lead Status",    key: "statusName",  width: 18 },
-        { header: "Lead Source",    key: "sourceName",  width: 18 },
-        { header: "Priority",       key: "priority",    width: 12 },
         { header: "Note",           key: "note",        width: 28 },
         { header: "Failure Reason", key: "errors",      width: 50 },
       ];
@@ -1791,11 +1638,11 @@ exports.bulkImportLeads = async (req, res) => {
           fullName:  f.fullName,
           contact:   f.contact,
           email:     f.email,
-          companyName: f.companyName,
+          kwRequirement: f.kwRequirement,
+          discomName: f.discomName,
           address:   f.address,
+          locationLink: f.locationLink,
           statusName: f.statusName,
-          sourceName: f.sourceName,
-          priority:  f.priority,
           note:      f.note,
           errors:    f.errors,
         });

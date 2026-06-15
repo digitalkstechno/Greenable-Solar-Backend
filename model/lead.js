@@ -17,11 +17,19 @@ const LeadSchema = new Schema(
       lowercase: true,
     },
 
-    companyName: {
+    kwRequirement: {
+      type: String,
+    },
+
+    discomName: {
       type: String,
     },
 
     address: {
+      type: String,
+    },
+
+    locationLink: {
       type: String,
     },
 
@@ -30,38 +38,9 @@ const LeadSchema = new Schema(
       ref: "leadStatus",
     },
 
-    leadSource: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "leadSource",
-    },
-
     assignedTo: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Staff",
-    },
-    leadLabel: [{
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "leadLabel",
-    }],
-
-    priority: {
-      type: String,
-      enum: ["high", "medium", "low"],
-      default: "medium",
-    },
-
-    nextFollowupDate: {
-      type: Date,
-      default: Date.now,
-    },
-
-    nextFollowupTime: {
-      type: String,
-    },
-
-    note: {
-      type: String,
-      trim: true,
     },
     followUps: [
       {
