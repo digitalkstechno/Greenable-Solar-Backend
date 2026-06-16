@@ -18,5 +18,6 @@ router.use("/notification", require("./notification"));
 router.use("/category", require("./category"));
 router.use("/product", require("./product"));
 router.use("/stock", require("./stockTransaction"));
+router.use("/users", require("./user"));
 
 module.exports = router;
