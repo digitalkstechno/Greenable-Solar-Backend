@@ -7,6 +7,7 @@ const LeadLabel = require("../model/leadLabel");
 const Notification = require("../model/notification");
 const ExcelJS = require("exceljs");
 const fs = require("fs");
+const { uploadToExternalService, deleteFileFromExternalService } = require("../utils/externalUploader");
 
 const sanitizeObjectId = (id) => {
   if (id === "" || id === "null" || id === "undefined" || id === null) return undefined;
@@ -23,12 +24,25 @@ exports.createLead = async (req, res) => {
 
 
     if (req.files && req.files.length > 0) {
-      leadData.attachments = req.files.map((el) => ({
-        originalName: el.originalname,
-        filename: el.filename,
-        path: `/images/LeadAttachment/${el.filename}`,
-      }));
+      const newAttachments = [];
+      for (const file of req.files) {
+        const fileUrl = await uploadToExternalService(file, 'LeadAttachment');
+        newAttachments.push({
+          originalName: file.originalname,
+          filename: file.originalname,
+          path: fileUrl,
+        });
+      }
+      leadData.attachments = newAttachments;
     }
+
+    leadData.activities = [
+      {
+        message: "New Lead Created",
+        by: req.user ? req.user._id : undefined,
+        date: new Date()
+      }
+    ];
 
     const leadDetails = await LEAD.create(leadData);
 
@@ -55,10 +69,14 @@ exports.createLead = async (req, res) => {
       data: leadDetails,
     });
   } catch (error) {
-    if (req.files) {
-      req.files.map((el) =>
-        deleteUploadedFile("images/LeadAttachment", el.filename),
-      );
+    if (leadData.attachments && leadData.attachments.length > 0) {
+      for (const el of leadData.attachments) {
+        if (el.path && el.path.startsWith('http')) {
+          await deleteFileFromExternalService(el.path).catch(console.error);
+        } else if (el.filename) {
+          deleteUploadedFile("images/LeadAttachment", el.filename);
+        }
+      }
     }
     return res.status(400).json({
       status: "Fail",
@@ -240,25 +258,36 @@ exports.leadUpdate = async (req, res) => {
         ? req.body["deleteAttachments[]"]
         : [req.body["deleteAttachments[]"]];
 
-      // Filter out attachments to be deleted and delete them from filesystem
+      // Filter out attachments to be deleted and delete them from filesystem/external service
+      const attachmentsToDelete = currentAttachments.filter(att => {
+        const id = att._id?.toString() || att.path;
+        return deleteIds.includes(id);
+      });
+      
+      for (const att of attachmentsToDelete) {
+         if (att.path && att.path.startsWith('http')) {
+             await deleteFileFromExternalService(att.path).catch(console.error);
+         } else if (att.filename) {
+             deleteUploadedFile("images/LeadAttachment", att.filename);
+         }
+      }
+      
       currentAttachments = currentAttachments.filter(att => {
         const id = att._id?.toString() || att.path;
-        if (deleteIds.includes(id)) {
-          if (att.filename) {
-            deleteUploadedFile("images/LeadAttachment", att.filename);
-          }
-          return false;
-        }
-        return true;
+        return !deleteIds.includes(id);
       });
     }
 
     if (req.files && req.files.length > 0) {
-      const newAttachments = req.files.map((el) => ({
-        originalName: el.originalname,
-        filename: el.filename,
-        path: `/images/LeadAttachment/${el.filename}`,
-      }));
+      const newAttachments = [];
+      for (const file of req.files) {
+        const fileUrl = await uploadToExternalService(file, 'LeadAttachment');
+        newAttachments.push({
+          originalName: file.originalname,
+          filename: file.originalname,
+          path: fileUrl,
+        });
+      }
       updateData.attachments = [...currentAttachments, ...newAttachments];
     } else if (req.body["deleteAttachments[]"]) {
       // If no new files but some were deleted, we still need to update the list
@@ -273,6 +302,46 @@ exports.leadUpdate = async (req, res) => {
         }
         return f;
       });
+    }
+
+    let newActivities = [];
+    if (updateData.leadStatus && updateData.leadStatus.toString() !== oldLeads.leadStatus?.toString()) {
+      const statusDetails = await LeadStatus.findById(updateData.leadStatus);
+      if (statusDetails) {
+        newActivities.push({
+          message: `Stage changed to ${statusDetails.name}`,
+          by: req.user ? req.user._id : undefined,
+          date: new Date()
+        });
+      }
+    }
+
+    if (updateData.followUps && Array.isArray(updateData.followUps) && oldLeads.followUps && updateData.followUps.length > oldLeads.followUps.length) {
+      const latestFollowUp = updateData.followUps[updateData.followUps.length - 1];
+      const datePart = latestFollowUp.date ? (typeof latestFollowUp.date === 'string' ? latestFollowUp.date.substring(0,10) : latestFollowUp.date.toISOString().substring(0,10)) : '';
+      newActivities.push({
+        message: `Follow-up added for ${datePart}${latestFollowUp.note ? ' | Note: ' + latestFollowUp.note : ''}`,
+        by: req.user ? req.user._id : undefined,
+        date: new Date()
+      });
+    }
+
+    if (updateData.quotation && (!oldLeads.quotation || Object.keys(oldLeads.quotation).length === 0)) {
+      newActivities.push({
+        message: `Quotation Generated`,
+        by: req.user ? req.user._id : undefined,
+        date: new Date()
+      });
+    } else if (updateData.quotation) {
+      newActivities.push({
+        message: `Quotation Updated`,
+        by: req.user ? req.user._id : undefined,
+        date: new Date()
+      });
+    }
+
+    if (newActivities.length > 0) {
+      updateData.activities = [...(oldLeads.activities || []), ...newActivities];
     }
 
     let updatedLeads = await LEAD.findByIdAndUpdate(leadId, updateData, {
@@ -524,14 +593,27 @@ exports.updateKanbanStatus = async (req, res) => {
       throw new Error("Lead not found");
     }
 
+    const previousStatus = oldLead.leadStatus ? oldLead.leadStatus.toString() : null;
+
     // Update status
     oldLead.leadStatus = leadStatus;
     await oldLead.save();
 
     // Update count
-    if (oldLead.leadStatus.toString() !== leadStatus.toString()) {
-      await decrementCount({ statusId: oldLead.leadStatus });
+    if (previousStatus !== leadStatus.toString()) {
+      if (previousStatus) await decrementCount({ statusId: previousStatus });
       await incrementCount({ statusId: leadStatus });
+      
+      const newStatusObj = await LeadStatus.findById(leadStatus);
+      if (newStatusObj) {
+        oldLead.activities = oldLead.activities || [];
+        oldLead.activities.push({
+          message: `Stage changed to ${newStatusObj.name}`,
+          by: req.user ? req.user._id : undefined,
+          date: new Date()
+        });
+        await oldLead.save();
+      }
     }
 
     return res.status(200).json({
@@ -1387,6 +1469,42 @@ exports.exportLeadsToExcel = async (req, res) => {
 
     await workbook.xlsx.write(res);
     res.end();
+  } catch (error) {
+    return res.status(500).json({ status: "Fail", message: error.message });
+  }
+};
+
+exports.deleteAttachment = async (req, res) => {
+  try {
+    const { leadId, attachmentId } = req.params;
+    
+    const lead = await LEAD.findById(leadId);
+    if (!lead) return res.status(404).json({ status: "Fail", message: "Lead not found" });
+
+    const attachmentIndex = lead.attachments.findIndex(
+      (a) => a._id.toString() === attachmentId
+    );
+
+    if (attachmentIndex === -1) {
+      return res.status(404).json({ status: "Fail", message: "Attachment not found" });
+    }
+
+    const attachment = lead.attachments[attachmentIndex];
+
+    // Delete file from filesystem or external service
+    if (attachment.path && attachment.path.startsWith('http')) {
+      const { deleteFileFromExternalService } = require("../utils/externalUploader");
+      await deleteFileFromExternalService(attachment.path).catch(console.error);
+    } else if (attachment.filename) {
+      const { deleteUploadedFile } = require("../utils/fileHelper");
+      deleteUploadedFile("images/LeadAttachment", attachment.filename);
+    }
+
+    // Remove from array and save
+    lead.attachments.splice(attachmentIndex, 1);
+    await lead.save();
+
+    return res.status(200).json({ status: "Success", message: "Attachment deleted successfully" });
   } catch (error) {
     return res.status(500).json({ status: "Fail", message: error.message });
   }
