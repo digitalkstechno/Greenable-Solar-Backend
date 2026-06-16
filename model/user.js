@@ -30,7 +30,8 @@ let UserSchema = new Schema(
       default: "active",
     },
     department: {
-      type: String,
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Department",
     },
 
   },

@@ -83,10 +83,10 @@ exports.fetchAllUsers = async (req, res) => {
 
     const totalUsers = await USER.countDocuments(query);
     const usersData = await USER.find(query)
-
       .skip(skip)
       .limit(limit)
       .sort({ createdAt: -1 })
+      .populate("department");
    
 
     return res.status(200).json({
@@ -111,7 +111,7 @@ exports.fetchAllUsers = async (req, res) => {
 exports.fetchUserById = async (req, res) => {
   try {
     let userId = req.params.id;
-    let userData = await USER.findById(userId);
+    let userData = await USER.findById(userId).populate("department");
     if (!userData) {
       throw new Error("User not found");
     }
