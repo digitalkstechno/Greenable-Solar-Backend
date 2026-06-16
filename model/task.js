@@ -12,7 +12,7 @@ const TaskSchema = new mongoose.Schema(
       enum: ["low", "medium", "high"],
       default: "medium",
     },
-    assignedUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: "Staff" }],
+    assignedUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
     assignedTeams: [{ type: mongoose.Schema.Types.ObjectId, ref: "Team" }],
     attachments: [
       {
@@ -21,7 +21,7 @@ const TaskSchema = new mongoose.Schema(
         path: String,
       },
     ],
-    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "Staff" },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   },
   { timestamps: true }
 );

@@ -6,7 +6,7 @@ const NotificationSchema = new Schema(
   {
     recipient: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Staff",
+      ref: "User",
       required: true,
     },
     title: {

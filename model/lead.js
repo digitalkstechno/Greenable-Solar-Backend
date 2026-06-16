@@ -40,14 +40,14 @@ const LeadSchema = new Schema(
 
     assignedTo: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Staff",
+      ref: "User",
     },
     followUps: [
       {
         date: { type: Date },
         time: { type: String },
         note: { type: String, trim: true },
-        staff: { type: mongoose.Schema.Types.ObjectId, ref: "Staff" },
+        staff: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
         createdAt: { type: Date, default: Date.now },
       },
     ],
@@ -61,7 +61,7 @@ const LeadSchema = new Schema(
     activities: [
       {
         message: { type: String },
-        by: { type: mongoose.Schema.Types.ObjectId, ref: "Staff" },
+        by: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
         date: { type: Date, default: Date.now },
       }
     ],

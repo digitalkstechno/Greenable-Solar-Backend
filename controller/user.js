@@ -1,16 +1,22 @@
 const USER = require("../model/user");
 const { encryptData, decryptData } = require("../utils/crypto");
 const { deleteUploadedFile } = require("../utils/fileHelper");
+const { uploadToExternalService, deleteFileFromExternalService } = require("../utils/externalUploader");
 const jwt = require("jsonwebtoken");
 
 exports.createUser = async (req, res) => {
+  let profileImage = null;
   try {
     const { fullName, email, phone, password, department, status } = req.body;
 
     const encryptedPassword = encryptData(password);
 
+    if (req.file) {
+      profileImage = await uploadToExternalService(req.file, "UserProfileImages");
+    }
+
     const userData = {
-      profileImage: req.file ? req.file.filename : null,
+      profileImage: profileImage,
       fullName,
       email,
       phone,
@@ -27,8 +33,8 @@ exports.createUser = async (req, res) => {
       data: UserDetails,
     });
   } catch (error) {
-    if (req.file) {
-      deleteUploadedFile("images/UserProfileImages", req.file.filename);
+    if (profileImage) {
+      await deleteFileFromExternalService(profileImage).catch(console.error);
     }
     return res.status(400).json({
       status: "Fail",
@@ -163,8 +169,12 @@ exports.userUpdate = async (req, res) => {
     }
 
     if (req.file) {
-      deleteUploadedFile("images/UserProfileImages", oldUser.profileImage);
-      req.body.profileImage = req.file.filename;
+      if (oldUser.profileImage && oldUser.profileImage.startsWith('http')) {
+        await deleteFileFromExternalService(oldUser.profileImage).catch(console.error);
+      } else if (oldUser.profileImage) {
+        deleteUploadedFile("images/UserProfileImages", oldUser.profileImage);
+      }
+      req.body.profileImage = await uploadToExternalService(req.file, "UserProfileImages");
     }
 
     let updatedUser = await USER.findByIdAndUpdate(userID, req.body, {
@@ -176,7 +186,9 @@ exports.userUpdate = async (req, res) => {
       data: updatedUser,
     });
   } catch (error) {
-    if (req.file) {
+    if (req.file && req.body.profileImage && req.body.profileImage.startsWith('http')) {
+      await deleteFileFromExternalService(req.body.profileImage).catch(console.error);
+    } else if (req.file && req.file.filename) {
       deleteUploadedFile("images/UserProfileImages", req.file.filename);
     }
     return res.status(404).json({
@@ -194,7 +206,9 @@ exports.userDelete = async (req, res) => {
     if (!oldUser) {
       throw new Error("User not found");
     }
-    if (oldUser.profileImage) {
+    if (oldUser.profileImage && oldUser.profileImage.startsWith('http')) {
+      await deleteFileFromExternalService(oldUser.profileImage).catch(console.error);
+    } else if (oldUser.profileImage) {
       deleteUploadedFile("images/UserProfileImages", oldUser.profileImage);
     }
     await USER.findByIdAndDelete(userID);
