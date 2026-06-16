@@ -81,6 +81,15 @@ const LeadSchema = new Schema(
       type: Boolean,
       default: true,
     },
+    nextFollowupDate: {
+      type: Date,
+    },
+    nextFollowupTime: {
+      type: String,
+    },
+    lastFollowUp: {
+      type: Date,
+    },
     metaLeadId: {
       type: String,
       unique: true,
@@ -92,7 +101,15 @@ const LeadSchema = new Schema(
     paymentAmount: {
       type: Number,
       default: 0,
-    }
+    },
+    nextFollowupDate: {
+      type: Date,
+      default: null,
+    },
+    nextFollowupTime: {
+      type: String,
+      default: null,
+    },
   },
   {
     timestamps: true,

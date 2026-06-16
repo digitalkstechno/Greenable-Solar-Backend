@@ -864,8 +864,8 @@ exports.getUpcomingFollowups = async (req, res) => {
     const now = new Date();
 
     const matchStage = {
-      isActive: true,
-      nextFollowupDate: { $ne: null },
+      isActive: { $ne: false },
+      nextFollowupDate: { $ne: null, $exists: true },
     };
 
     if (req.leadScope === "own" && req.user && req.user._id) {
@@ -983,9 +983,8 @@ exports.getDueFollowups = async (req, res) => {
     const now = new Date();
 
     const matchStage = {
-      isActive: true,
-      nextFollowupDate: { $ne: null },
-      nextFollowupTime: { $ne: null },
+      isActive: { $ne: false },
+      nextFollowupDate: { $ne: null, $exists: true },
     };
 
     if (req.leadScope === "own" && req.user && req.user._id) {
