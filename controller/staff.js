@@ -1,9 +1,11 @@
 const STAFF = require("../model/staff");
 const { encryptData, decryptData } = require("../utils/crypto");
 const { deleteUploadedFile } = require("../utils/fileHelper");
+const { uploadToExternalService, deleteFileFromExternalService } = require("../utils/externalUploader");
 const jwt = require("jsonwebtoken");
 
 exports.createStaff = async (req, res) => {
+  let profileImage = null;
   try {
     const { fullName, email, phone, role, password, status } = req.body;
 
@@ -14,8 +16,12 @@ exports.createStaff = async (req, res) => {
 
     const encryptedPassword = encryptData(password);
 
+    if (req.file) {
+      profileImage = await uploadToExternalService(req.file, "StaffProfileImages");
+    }
+
     const staffData = {
-      profileImage: req.file ? req.file.filename : null,
+      profileImage,
       fullName,
       email,
       phone,
@@ -34,7 +40,9 @@ exports.createStaff = async (req, res) => {
       data: staffDetails,
     });
   } catch (error) {
-    if (req.file) {
+    if (profileImage) {
+      await deleteFileFromExternalService(profileImage).catch(console.error);
+    } else if (req.file && req.file.filename) {
       deleteUploadedFile("images/StaffProfileImages", req.file.filename);
     }
     return res.status(400).json({
@@ -179,8 +187,12 @@ exports.staffUpdate = async (req, res) => {
     }
 
     if (req.file) {
-      deleteUploadedFile("images/StaffProfileImages", oldStaff.profileImage);
-      req.body.profileImage = req.file.filename;
+      if (oldStaff.profileImage && oldStaff.profileImage.startsWith('http')) {
+        await deleteFileFromExternalService(oldStaff.profileImage).catch(console.error);
+      } else if (oldStaff.profileImage) {
+        deleteUploadedFile("images/StaffProfileImages", oldStaff.profileImage);
+      }
+      req.body.profileImage = await uploadToExternalService(req.file, "StaffProfileImages");
     }
 
     let updatedStaff = await STAFF.findByIdAndUpdate(staffId, req.body, {
@@ -192,7 +204,9 @@ exports.staffUpdate = async (req, res) => {
       data: updatedStaff,
     });
   } catch (error) {
-    if (req.file) {
+    if (req.file && req.body.profileImage && req.body.profileImage.startsWith('http')) {
+      await deleteFileFromExternalService(req.body.profileImage).catch(console.error);
+    } else if (req.file && req.file.filename) {
       deleteUploadedFile("images/StaffProfileImages", req.file.filename);
     }
     return res.status(404).json({
@@ -210,7 +224,9 @@ exports.staffDelete =  async (req, res) => {
     if (!oldStaff) {
       throw new Error("Staff not found");
     }
-    if (oldStaff.profileImage) {
+    if (oldStaff.profileImage && oldStaff.profileImage.startsWith('http')) {
+      await deleteFileFromExternalService(oldStaff.profileImage).catch(console.error);
+    } else if (oldStaff.profileImage) {
       deleteUploadedFile("images/StaffProfileImages", oldStaff.profileImage);
     }
     await STAFF.findByIdAndDelete(staffId);

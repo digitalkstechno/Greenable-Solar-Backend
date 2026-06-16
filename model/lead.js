@@ -58,6 +58,25 @@ const LeadSchema = new Schema(
         path: String,
       },
     ],
+    activities: [
+      {
+        message: { type: String },
+        by: { type: mongoose.Schema.Types.ObjectId, ref: "Staff" },
+        date: { type: Date, default: Date.now },
+      }
+    ],
+    quotation: {
+      date: Date,
+      solarModule: String,
+      inverter: String,
+      options: [String],
+      rows: [
+        {
+          title: String,
+          values: [String]
+        }
+      ]
+    },
     isActive: {
       type: Boolean,
       default: true,

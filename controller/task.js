@@ -2,6 +2,7 @@ const Task = require("../model/task");
 const TaskStatus = require("../model/taskStatus");
 const Notification = require("../model/notification");
 const { deleteUploadedFile } = require("../utils/fileHelper");
+const { uploadToExternalService, deleteFileFromExternalService } = require("../utils/externalUploader");
 
 const sanitizeObjectId = (id) => {
   if (id === "" || id === "null" || id === "undefined" || id === null) return null;
@@ -50,6 +51,7 @@ exports.fetchKanbanTasksByStatus = async (req, res) => {
 };
 
 exports.createTask = async (req, res) => {
+  let uploadedAttachments = [];
   try {
     const { subject, description, startDate, endDate, taskStatus, priority } = req.body;
 
@@ -58,11 +60,14 @@ exports.createTask = async (req, res) => {
       try { return JSON.parse(val); } catch { return Array.isArray(val) ? val : [val]; }
     };
 
-    const attachments = (req.files || []).map((f) => ({
-      originalName: f.originalname,
-      filename: f.filename,
-      path: `/images/TaskAttachments/${f.filename}`,
-    }));
+    for (const f of (req.files || [])) {
+      const fileUrl = await uploadToExternalService(f, 'TaskAttachments');
+      uploadedAttachments.push({
+        originalName: f.originalname,
+        filename: f.originalname,
+        path: fileUrl,
+      });
+    }
 
     const taskData = {
       subject,
@@ -72,7 +77,7 @@ exports.createTask = async (req, res) => {
       priority,
       assignedUsers: parseIds(req.body.assignedUsers),
       assignedTeams: parseIds(req.body.assignedTeams),
-      attachments,
+      attachments: uploadedAttachments,
       createdBy: req.user?._id,
       taskStatus: sanitizeObjectId(taskStatus),
     };
@@ -110,7 +115,17 @@ exports.createTask = async (req, res) => {
 
     return res.status(201).json({ status: "Success", message: "Task created successfully", data: task });
   } catch (error) {
-    (req.files || []).forEach((f) => deleteUploadedFile("images/TaskAttachments", f.filename));
+    for (const att of uploadedAttachments) {
+      if (att.path && att.path.startsWith('http')) {
+        await deleteFileFromExternalService(att.path).catch(console.error);
+      }
+    }
+    // Also cleanup local if there are any that were locally saved previously (safety)
+    (req.files || []).forEach((f) => {
+      if (!uploadedAttachments.some(a => a.originalName === f.originalname)) {
+         deleteUploadedFile("images/TaskAttachments", f.filename);
+      }
+    });
     return res.status(400).json({ status: "Fail", message: error.message });
   }
 };
@@ -164,6 +179,7 @@ exports.getTaskById = async (req, res) => {
 };
 
 exports.updateTask = async (req, res) => {
+  let newAttachments = [];
   try {
     const task = await Task.findById(req.params.id);
     if (!task) throw new Error("Task not found");
@@ -183,11 +199,14 @@ exports.updateTask = async (req, res) => {
     }
 
     if (req.files?.length) {
-      const newAttachments = req.files.map((f) => ({
-        originalName: f.originalname,
-        filename: f.filename,
-        path: `/images/TaskAttachments/${f.filename}`,
-      }));
+      for (const f of req.files) {
+        const fileUrl = await uploadToExternalService(f, 'TaskAttachments');
+        newAttachments.push({
+          originalName: f.originalname,
+          filename: f.originalname,
+          path: fileUrl,
+        });
+      }
       updateData.attachments = [...(task.attachments || []), ...newAttachments];
     }
 
@@ -224,7 +243,16 @@ exports.updateTask = async (req, res) => {
 
     return res.status(200).json({ status: "Success", message: "Task updated successfully", data: updated });
   } catch (error) {
-    (req.files || []).forEach((f) => deleteUploadedFile("images/TaskAttachments", f.filename));
+    for (const att of newAttachments) {
+      if (att.path && att.path.startsWith('http')) {
+        await deleteFileFromExternalService(att.path).catch(console.error);
+      }
+    }
+    (req.files || []).forEach((f) => {
+      if (!newAttachments.some(a => a.originalName === f.originalname)) {
+         deleteUploadedFile("images/TaskAttachments", f.filename);
+      }
+    });
     return res.status(400).json({ status: "Fail", message: error.message });
   }
 };
@@ -436,7 +464,15 @@ exports.deleteTask = async (req, res) => {
   try {
     const task = await Task.findById(req.params.id);
     if (!task) throw new Error("Task not found");
-    (task.attachments || []).forEach((a) => deleteUploadedFile("images/TaskAttachments", a.filename));
+    
+    for (const a of (task.attachments || [])) {
+      if (a.path && a.path.startsWith('http')) {
+        await deleteFileFromExternalService(a.path).catch(console.error);
+      } else if (a.filename) {
+        deleteUploadedFile("images/TaskAttachments", a.filename);
+      }
+    }
+    
     await Task.findByIdAndDelete(req.params.id);
     return res.status(200).json({ status: "Success", message: "Task deleted successfully" });
   } catch (error) {
@@ -496,8 +532,10 @@ exports.deleteAttachment = async (req, res) => {
 
     const attachment = task.attachments[attachmentIndex];
 
-    // Delete file from filesystem
-    if (attachment.filename) {
+    // Delete file from filesystem or external service
+    if (attachment.path && attachment.path.startsWith('http')) {
+      await deleteFileFromExternalService(attachment.path).catch(console.error);
+    } else if (attachment.filename) {
       deleteUploadedFile("images/TaskAttachments", attachment.filename);
     }
 
