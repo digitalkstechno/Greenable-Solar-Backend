@@ -1,7 +1,7 @@
 var express = require("express");
 var router = express.Router();
 const createUploader = require("../utils/multer");
-const upload = createUploader("images/StaffProfileImages");
+const upload = createUploader("images/UserProfileImages");
 
 const authMiddleware = require("../middleware/auth");
 const { authorize } = require("../middleware/permissions");

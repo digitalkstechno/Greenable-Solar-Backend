@@ -5,7 +5,7 @@ const jwt = require("jsonwebtoken");
 
 exports.createUser = async (req, res) => {
   try {
-    const { fullName, email, phone, password, department } = req.body;
+    const { fullName, email, phone, password, department, status } = req.body;
 
     const encryptedPassword = encryptData(password);
 
@@ -15,6 +15,7 @@ exports.createUser = async (req, res) => {
       email,
       phone,
       password: encryptedPassword,
+      status: status || "active",
       department: department,
     };
 
@@ -27,7 +28,7 @@ exports.createUser = async (req, res) => {
     });
   } catch (error) {
     if (req.file) {
-      deleteUploadedFile("images/StaffProfileImages", req.file.filename);
+      deleteUploadedFile("images/UserProfileImages", req.file.filename);
     }
     return res.status(400).json({
       status: "Fail",
@@ -162,7 +163,7 @@ exports.userUpdate = async (req, res) => {
     }
 
     if (req.file) {
-      deleteUploadedFile("images/StaffProfileImages", oldUser.profileImage);
+      deleteUploadedFile("images/UserProfileImages", oldUser.profileImage);
       req.body.profileImage = req.file.filename;
     }
 
@@ -176,7 +177,7 @@ exports.userUpdate = async (req, res) => {
     });
   } catch (error) {
     if (req.file) {
-      deleteUploadedFile("images/StaffProfileImages", req.file.filename);
+      deleteUploadedFile("images/UserProfileImages", req.file.filename);
     }
     return res.status(404).json({
       status: "Fail",
@@ -194,7 +195,7 @@ exports.userDelete = async (req, res) => {
       throw new Error("User not found");
     }
     if (oldUser.profileImage) {
-      deleteUploadedFile("images/StaffProfileImages", oldUser.profileImage);
+      deleteUploadedFile("images/UserProfileImages", oldUser.profileImage);
     }
     await USER.findByIdAndDelete(userID);
 
