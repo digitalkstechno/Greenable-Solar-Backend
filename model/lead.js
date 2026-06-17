@@ -25,6 +25,10 @@ const LeadSchema = new Schema(
       type: String,
     },
 
+    leadrefrance: {
+      type: String,
+    },
+
     address: {
       type: String,
     },
@@ -41,6 +45,22 @@ const LeadSchema = new Schema(
     assignedTo: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
+    },
+    leadLabel: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "leadLabel",
+    },
+    projecttype: {
+      type: String,
+    },
+    lostReason: {
+      type: String,
+    },
+    lostDate: {
+      type: Date,
+    },
+    wonDate: {
+      type: Date,
     },
     followUps: [
       {
@@ -83,9 +103,11 @@ const LeadSchema = new Schema(
     },
     nextFollowupDate: {
       type: Date,
+      default: null,
     },
     nextFollowupTime: {
       type: String,
+      default: null,
     },
     lastFollowUp: {
       type: Date,
@@ -101,14 +123,6 @@ const LeadSchema = new Schema(
     paymentAmount: {
       type: Number,
       default: 0,
-    },
-    nextFollowupDate: {
-      type: Date,
-      default: null,
-    },
-    nextFollowupTime: {
-      type: String,
-      default: null,
     },
   },
   {

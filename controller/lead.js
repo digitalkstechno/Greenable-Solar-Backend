@@ -1386,9 +1386,11 @@ exports.exportLeadsToExcel = async (req, res) => {
       { header: "Full Name", key: "fullName", width: 22 },
       { header: "Email", key: "email", width: 28 },
       { header: "Phone", key: "phone", width: 16 },
-      { header: "Company", key: "company", width: 22 },
+      { header: "KW Requirement", key: "kwRequirement", width: 16 },
+      { header: "Discom Name", key: "discomName", width: 20 },
+      { header: "Lead Reference", key: "leadrefrance", width: 18 },
+      { header: "Project Type", key: "projecttype", width: 18 },
       { header: "Lead Status", key: "status", width: 18 },
-
       { header: "Assigned To", key: "assigned", width: 20 },
       { header: "Priority", key: "priority", width: 12 },
       { header: "Created At", key: "createdAt", width: 18 },
@@ -1416,8 +1418,11 @@ exports.exportLeadsToExcel = async (req, res) => {
         sno: idx + 1,
         fullName: lead.fullName || "",
         email: lead.email || "",
-        phone: lead.phone || "",
-        company: lead.companyName || "",
+        phone: lead.contact || "",
+        kwRequirement: lead.kwRequirement || "",
+        discomName: lead.discomName || "",
+        leadrefrance: lead.leadrefrance || "",
+        projecttype: lead.projecttype || "",
         status: lead.leadStatus?.name || "",
         assigned: lead.assignedTo?.fullName || "",
         priority: lead.priority || "",
@@ -1544,6 +1549,8 @@ exports.downloadImportTemplate = async (req, res) => {
       { header: "Email",           key: "email",       width: 28 },
       { header: "KW Requirement",  key: "kwRequirement", width: 18 },
       { header: "Discom Name",     key: "discomName",  width: 20 },
+      { header: "Lead Reference",  key: "leadrefrance", width: 20 },
+      { header: "Project Type",    key: "projecttype", width: 20 },
       { header: "Address",         key: "address",     width: 28 },
       { header: "Location Link",   key: "locationLink", width: 28 },
       { header: "Lead Status *",   key: "leadStatus",  width: 20 },
@@ -1658,10 +1665,12 @@ exports.bulkImportLeads = async (req, res) => {
       const email       = getCellValue(3);
       const kwRequirement = getCellValue(4);
       const discomName  = getCellValue(5);
-      const address     = getCellValue(6);
-      const locationLink = getCellValue(7);
-      const statusName  = getCellValue(8);
-      const note        = getCellValue(9);
+      const leadrefrance = getCellValue(6);
+      const projecttype = getCellValue(7);
+      const address     = getCellValue(8);
+      const locationLink = getCellValue(9);
+      const statusName  = getCellValue(10);
+      const note        = getCellValue(11);
 
       // Skip completely empty rows
       if (!fullName && !contact && !kwRequirement && !statusName && !discomName) return;
@@ -1680,9 +1689,9 @@ exports.bulkImportLeads = async (req, res) => {
       }
 
       if (errors.length > 0) {
-        failedRows.push({ rowNumber, fullName, contact, email, kwRequirement, discomName, address, locationLink, statusName, note, errors: errors.join(" | ") });
+        failedRows.push({ rowNumber, fullName, contact, email, kwRequirement, discomName, leadrefrance, projecttype, address, locationLink, statusName, note, errors: errors.join(" | ") });
       } else {
-        successRows.push({ fullName, contact, email: email || undefined, kwRequirement, discomName, address: address || undefined, locationLink: locationLink || undefined, leadStatus: statusId, note: note || undefined });
+        successRows.push({ fullName, contact, email: email || undefined, kwRequirement, discomName, leadrefrance: leadrefrance || undefined, projecttype: projecttype || undefined, address: address || undefined, locationLink: locationLink || undefined, leadStatus: statusId, note: note || undefined });
       }
     });
 
