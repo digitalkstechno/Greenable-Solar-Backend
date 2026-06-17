@@ -19,5 +19,6 @@ router.use("/category", require("./category"));
 router.use("/product", require("./product"));
 router.use("/stock", require("./stockTransaction"));
 router.use("/users", require("./user"));
+router.use("/project-detail", require("./projectDetail"));
 
 module.exports = router;
