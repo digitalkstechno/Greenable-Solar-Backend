@@ -3,6 +3,7 @@ var router = express.Router();
 const multer = require("multer");
 const createUploader = require("../utils/multer");
 const upload = createUploader("images/LeadAttachment");
+const paymentUpload = createUploader("images/PaymentProof");
 // Temp storage for bulk import files (memory or temp disk)
 const importUpload = multer({ dest: require("os").tmpdir() });
 let {
@@ -28,6 +29,8 @@ let {
   exportLeadsToExcel,
   downloadImportTemplate,
   bulkImportLeads,
+  addPayment,
+  getPayments,
 } = require("../controller/lead");
 const authMiddleware = require("../middleware/auth");
 const { authorize, leadReadScope } = require("../middleware/permissions");
@@ -98,4 +101,9 @@ router.delete(
   leadDelete,
 );
 router.delete('/:leadId/attachments/:attachmentId', authMiddleware, authorize("lead", "delete"), deleteAttachment);
+
+// Payment routes
+router.get('/:leadId/payments', authMiddleware, leadReadScope(), getPayments);
+router.post('/:leadId/payments', authMiddleware, authorize("lead", "update"), paymentUpload.single("proof"), addPayment);
+
 module.exports = router;

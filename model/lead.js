@@ -124,6 +124,19 @@ const LeadSchema = new Schema(
       type: Number,
       default: 0,
     },
+    payments: [
+      {
+        amount: { type: Number, required: true },
+        date: { type: Date, required: true },
+        mode: { type: String, required: true, enum: ['Cash', 'GPay', 'Bank Transfer'] },
+        proof: {
+          originalName: String,
+          filename: String,
+          path: String,
+        },
+        createdAt: { type: Date, default: Date.now }
+      }
+    ],
   },
   {
     timestamps: true,

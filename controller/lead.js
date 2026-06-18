@@ -1804,4 +1804,76 @@ exports.bulkImportLeads = async (req, res) => {
     }
     return res.status(500).json({ status: "Fail", message: error.message });
   }
+};
+
+// Add payment to lead
+exports.addPayment = async (req, res) => {
+  try {
+    const { leadId } = req.params;
+    const { amount, date, mode } = req.body;
+
+    const lead = await LEAD.findById(leadId);
+    if (!lead) {
+      return res.status(404).json({ status: "Fail", message: "Lead not found" });
+    }
+
+    const payment = {
+      amount: Number(amount),
+      date: new Date(date),
+      mode,
+    };
+
+    // Handle payment proof
+    if (req.file) {
+      const fileUrl = await uploadToExternalService(req.file, 'PaymentProof');
+      payment.proof = {
+        originalName: req.file.originalname,
+        filename: req.file.originalname,
+        path: fileUrl,
+      };
+    }
+
+    lead.payments = lead.payments || [];
+    lead.payments.push(payment);
+
+    // Update total payment amount
+    lead.paymentAmount = lead.payments.reduce((sum, p) => sum + (p.amount || 0), 0);
+
+    await lead.save();
+
+    return res.status(200).json({
+      status: "Success",
+      message: "Payment added successfully",
+      data: lead,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ status: "Fail", message: error.message });
+  }
+};
+
+// Get payments for a lead
+exports.getPayments = async (req, res) => {
+  try {
+    const { leadId } = req.params;
+    const lead = await LEAD.findById(leadId);
+
+    if (!lead) {
+      return res.status(404).json({ status: "Fail", message: "Lead not found" });
+    }
+
+    const payments = lead.payments || [];
+    const totalReceived = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
+
+    return res.status(200).json({
+      status: "Success",
+      data: {
+        payments,
+        totalReceived,
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ status: "Fail", message: error.message });
+  }
 };
