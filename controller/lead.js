@@ -1,4 +1,5 @@
 const LEAD = require("../model/lead");
+const User = require("../model/user");
 const { deleteUploadedFile } = require("../utils/fileHelper");
 const { incrementCount, decrementCount } = require("../utils/leadCountHelper");
 const LeadStatus = require("../model/leadStatus");
