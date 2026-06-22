@@ -1,4 +1,5 @@
 const Task = require("../model/task");
+const User = require("../model/user");
 const TaskStatus = require("../model/taskStatus");
 const Notification = require("../model/notification");
 const { deleteUploadedFile } = require("../utils/fileHelper");
