@@ -1,4 +1,4 @@
-const USER = require("../model/user");
+const STAFF = require("../model/staff");
 const { encryptData, decryptData } = require("../utils/crypto");
 const { deleteUploadedFile } = require("../utils/fileHelper");
 const { uploadToExternalService, deleteFileFromExternalService } = require("../utils/externalUploader");
@@ -7,35 +7,52 @@ const jwt = require("jsonwebtoken");
 exports.createUser = async (req, res) => {
   let profileImage = null;
   try {
-    const { fullName, email, phone, password, department, status } = req.body;
+    const { fullName, email, phone, role, password, status } = req.body;
+
+    const parseIds = (val) => {
+      if (!val) return [];
+      try { return JSON.parse(val); } catch { return Array.isArray(val) ? val : [val]; }
+    };
 
     const encryptedPassword = encryptData(password);
 
     if (req.file) {
-      profileImage = await uploadToExternalService(req.file, "UserProfileImages");
+      profileImage = await uploadToExternalService(req.file, "StaffProfileImages");
     }
 
     const userData = {
-      profileImage: profileImage,
+      profileImage,
       fullName,
       email,
       phone,
-      password: encryptedPassword,
+      role,
       status: status || "active",
-      department: department,
+      password: encryptedPassword,
+      teams: parseIds(req.body.teams),
+      organizations: parseIds(req.body.organizations),
     };
 
-    const UserDetails = await USER.create(userData);
+    const userDetails = await STAFF.create(userData);
 
     return res.status(201).json({
       status: "Success",
       message: "User created successfully",
-      data: UserDetails,
+      data: userDetails,
     });
   } catch (error) {
     if (profileImage) {
       await deleteFileFromExternalService(profileImage).catch(console.error);
+    } else if (req.file && req.file.filename) {
+      deleteUploadedFile("images/StaffProfileImages", req.file.filename);
     }
+    if (error.code === 11000) {
+      const duplicateField = Object.keys(error.keyValue)[0];
+      return res.status(400).json({
+        status: "Fail",
+        message: `A user with this ${duplicateField} already exists.`,
+      });
+    }
+
     return res.status(400).json({
       status: "Fail",
       message: error.message,
@@ -46,7 +63,7 @@ exports.createUser = async (req, res) => {
 exports.loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
-    let userverify = await USER.findOne({ email });
+    let userverify = await STAFF.findOne({ email }).populate("role").populate("teams").populate("organizations");
     if (!userverify) {
       throw new Error("Invalid Email or password");
     }
@@ -87,13 +104,14 @@ exports.fetchAllUsers = async (req, res) => {
       ],
     };
 
-    const totalUsers = await USER.countDocuments(query);
-    const usersData = await USER.find(query)
-
+    const totalUsers = await STAFF.countDocuments(query);
+    const usersData = await STAFF.find(query)
       .skip(skip)
       .limit(limit)
       .sort({ createdAt: -1 })
-   
+      .populate("role")
+      .populate("teams")
+      .populate("organizations");
 
     return res.status(200).json({
       status: "Success",
@@ -117,7 +135,7 @@ exports.fetchAllUsers = async (req, res) => {
 exports.fetchUserById = async (req, res) => {
   try {
     let userId = req.params.id;
-    let userData = await USER.findById(userId);
+    let userData = await STAFF.findById(userId).populate("role").populate("teams").populate("organizations");
     if (!userData) {
       throw new Error("User not found");
     }
@@ -157,12 +175,20 @@ exports.getCurrentUser = async (req, res) => {
 
 exports.userUpdate = async (req, res) => {
   try {
-    let userID = req.params.id;
-    let oldUser = await USER.findById(userID);
+    let userId = req.params.id;
+    let oldUser = await STAFF.findById(userId);
 
     if (!oldUser) {
       throw new Error("User not found");
     }
+
+    const parseIds = (val) => {
+      if (!val) return [];
+      try { return JSON.parse(val); } catch { return Array.isArray(val) ? val : [val]; }
+    };
+
+    if (req.body.teams !== undefined) req.body.teams = parseIds(req.body.teams);
+    if (req.body.organizations !== undefined) req.body.organizations = parseIds(req.body.organizations);
 
     if (req.body.password) {
       req.body.password = encryptData(req.body.password);
@@ -172,12 +198,12 @@ exports.userUpdate = async (req, res) => {
       if (oldUser.profileImage && oldUser.profileImage.startsWith('http')) {
         await deleteFileFromExternalService(oldUser.profileImage).catch(console.error);
       } else if (oldUser.profileImage) {
-        deleteUploadedFile("images/UserProfileImages", oldUser.profileImage);
+        deleteUploadedFile("images/StaffProfileImages", oldUser.profileImage);
       }
-      req.body.profileImage = await uploadToExternalService(req.file, "UserProfileImages");
+      req.body.profileImage = await uploadToExternalService(req.file, "StaffProfileImages");
     }
 
-    let updatedUser = await USER.findByIdAndUpdate(userID, req.body, {
+    let updatedUser = await STAFF.findByIdAndUpdate(userId, req.body, {
       new: true,
     });
     return res.status(200).json({
@@ -189,9 +215,17 @@ exports.userUpdate = async (req, res) => {
     if (req.file && req.body.profileImage && req.body.profileImage.startsWith('http')) {
       await deleteFileFromExternalService(req.body.profileImage).catch(console.error);
     } else if (req.file && req.file.filename) {
-      deleteUploadedFile("images/UserProfileImages", req.file.filename);
+      deleteUploadedFile("images/StaffProfileImages", req.file.filename);
     }
-    return res.status(404).json({
+    if (error.code === 11000) {
+      const duplicateField = Object.keys(error.keyValue)[0];
+      return res.status(400).json({
+        status: "Fail",
+        message: `A user with this ${duplicateField} already exists.`,
+      });
+    }
+
+    return res.status(400).json({
       status: "Fail",
       message: error.message,
     });
@@ -200,8 +234,8 @@ exports.userUpdate = async (req, res) => {
 
 exports.userDelete = async (req, res) => {
   try {
-    let userID = req.params.id;
-    let oldUser = await USER.findById(userID);
+    let userId = req.params.id;
+    let oldUser = await STAFF.findById(userId);
 
     if (!oldUser) {
       throw new Error("User not found");
@@ -209,9 +243,9 @@ exports.userDelete = async (req, res) => {
     if (oldUser.profileImage && oldUser.profileImage.startsWith('http')) {
       await deleteFileFromExternalService(oldUser.profileImage).catch(console.error);
     } else if (oldUser.profileImage) {
-      deleteUploadedFile("images/UserProfileImages", oldUser.profileImage);
+      deleteUploadedFile("images/StaffProfileImages", oldUser.profileImage);
     }
-    await USER.findByIdAndDelete(userID);
+    await STAFF.findByIdAndDelete(userId);
 
     return res.status(200).json({
       status: "Success",
