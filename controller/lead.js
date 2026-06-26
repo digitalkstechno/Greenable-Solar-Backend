@@ -1,5 +1,5 @@
 const LEAD = require("../model/lead");
-const User = require("../model/user");
+const Staff = require("../model/staff");
 const { deleteUploadedFile } = require("../utils/fileHelper");
 const { incrementCount, decrementCount } = require("../utils/leadCountHelper");
 const LeadStatus = require("../model/leadStatus");
@@ -20,8 +20,13 @@ exports.createLead = async (req, res) => {
     const leadData = { ...req.body };
 
     // Sanitize ObjectIds
-    leadData.leadStatus = sanitizeObjectId(leadData.leadStatus);
-    leadData.assignedTo = sanitizeObjectId(leadData.assignedTo);
+    const sanitizedLeadStatus = sanitizeObjectId(leadData.leadStatus);
+    if (sanitizedLeadStatus !== undefined) leadData.leadStatus = sanitizedLeadStatus;
+    else delete leadData.leadStatus;
+
+    const sanitizedAssignedTo = sanitizeObjectId(leadData.assignedTo);
+    if (sanitizedAssignedTo !== undefined) leadData.assignedTo = sanitizedAssignedTo;
+    else delete leadData.assignedTo;
 
 
     if (req.files && req.files.length > 0) {
@@ -247,8 +252,13 @@ exports.leadUpdate = async (req, res) => {
     const updateData = { ...req.body };
 
     // Sanitize ObjectIds
-    updateData.leadStatus = sanitizeObjectId(updateData.leadStatus);
-    updateData.assignedTo = sanitizeObjectId(updateData.assignedTo);
+    const sanitizedStatus = sanitizeObjectId(updateData.leadStatus);
+    if (sanitizedStatus !== undefined) updateData.leadStatus = sanitizedStatus;
+    else delete updateData.leadStatus;
+
+    const sanitizedAssigned = sanitizeObjectId(updateData.assignedTo);
+    if (sanitizedAssigned !== undefined) updateData.assignedTo = sanitizedAssigned;
+    else delete updateData.assignedTo;
 
 
     let currentAttachments = [...(oldLeads.attachments || [])];

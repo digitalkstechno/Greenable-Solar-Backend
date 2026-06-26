@@ -44,7 +44,7 @@ const LeadSchema = new Schema(
 
     assignedTo: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      ref: "Staff",
     },
     leadLabel: {
       type: mongoose.Schema.Types.ObjectId,
@@ -67,7 +67,7 @@ const LeadSchema = new Schema(
         date: { type: Date },
         time: { type: String },
         note: { type: String, trim: true },
-        staff: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        staff: { type: mongoose.Schema.Types.ObjectId, ref: "Staff" },
         createdAt: { type: Date, default: Date.now },
       },
     ],
@@ -81,7 +81,7 @@ const LeadSchema = new Schema(
     activities: [
       {
         message: { type: String },
-        by: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        by: { type: mongoose.Schema.Types.ObjectId, ref: "Staff" },
         date: { type: Date, default: Date.now },
       }
     ],
