@@ -97,6 +97,33 @@ const LeadSchema = new Schema(
         }
       ]
     },
+    quotations: [
+      {
+        id: String,
+        date: Date,
+        createdAt: { type: Date, default: Date.now },
+        solarModule: String,
+        inverter: String,
+        options: [String],
+        rows: [
+          {
+            title: String,
+            values: [String]
+          }
+        ],
+        bomItems: [
+          {
+            srNo: String,
+            description: String,
+            uom: String,
+            qty: String,
+            size: String,
+            make: String
+          }
+        ]
+      }
+    ],
+
     isActive: {
       type: Boolean,
       default: true,
