@@ -328,6 +328,7 @@ exports.leadUpdate = async (req, res) => {
     }
 
     if (updateData.followUps && Array.isArray(updateData.followUps) && oldLeads.followUps && updateData.followUps.length > oldLeads.followUps.length) {
+      updateData.lastFollowUp = new Date();
       const latestFollowUp = updateData.followUps[updateData.followUps.length - 1];
       const datePart = latestFollowUp.date ? (typeof latestFollowUp.date === 'string' ? latestFollowUp.date.substring(0,10) : latestFollowUp.date.toISOString().substring(0,10)) : '';
       newActivities.push({
@@ -369,8 +370,6 @@ exports.leadUpdate = async (req, res) => {
       await decrementCount({ statusId: oldLeads.leadStatus });
       await incrementCount({ statusId: updatedLeads.leadStatus });
     }
-
-
 
     // 🔹 Notification handling for reassignment
     const oldStaff = oldLeads.assignedTo ? String(oldLeads.assignedTo._id || oldLeads.assignedTo) : null;
@@ -1887,4 +1886,4 @@ exports.getPayments = async (req, res) => {
     console.error(error);
     return res.status(500).json({ status: "Fail", message: error.message });
   }
-};
+};
