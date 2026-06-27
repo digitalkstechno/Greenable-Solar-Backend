@@ -72,6 +72,14 @@ exports.loginUser = async (req, res) => {
     if (String(decryptedPassword) !== password) {
       throw new Error("Invalid password");
     }
+
+    if (userverify.status && userverify.status.toLowerCase() === "inactive") {
+      return res.status(403).json({
+        status: "Fail",
+        message: "Your account is inactive. Please contact the administrator.",
+      });
+    }
+
     let token = jwt.sign({ id: userverify._id }, process.env.JWT_SECRET_KEY);
     return res.status(200).json({
       status: "Success",
