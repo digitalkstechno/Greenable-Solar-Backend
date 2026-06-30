@@ -3,13 +3,24 @@ const ROLE = require("../model/role");
 exports.createRole = async (req, res, next) => {
   try {
     let roleDetails = req.body;
+    if (roleDetails.roleName) {
+      const existingRole = await ROLE.findOne({
+        roleName: roleDetails.roleName.trim(),
+      }).collation({ locale: "en", strength: 2 });
+      if (existingRole) {
+        return res.status(400).json({
+          status: "Fail",
+          message: "Department already exist",
+        });
+      }
+    }
     let newRole = await ROLE.create(roleDetails);
     res.status(201).json({
       status: "Success",
       data: newRole,
     });
   } catch (error) {
-    res.status(404).json({
+    res.status(400).json({
       status: "Fail",
       message: error.message,
     });
@@ -78,7 +89,21 @@ exports.roleUpdate = async (req, res) => {
     let roleId = req.params.id;
     let oldRole = await ROLE.findById(roleId);
     if (!oldRole) {
-      throw new Error("Role not found");
+      return res.status(404).json({
+        status: "Fail",
+        message: "Role not found",
+      });
+    }
+    if (req.body.roleName && req.body.roleName.trim().toLowerCase() !== oldRole.roleName.toLowerCase()) {
+      const existingRole = await ROLE.findOne({
+        roleName: req.body.roleName.trim(),
+      }).collation({ locale: "en", strength: 2 });
+      if (existingRole) {
+        return res.status(400).json({
+          status: "Fail",
+          message: "Department already exist",
+        });
+      }
     }
     let updatedRole = await ROLE.findByIdAndUpdate(roleId, req.body, {
       new: true,
@@ -89,7 +114,7 @@ exports.roleUpdate = async (req, res) => {
       data: updatedRole,
     });
   } catch (error) {
-    return res.status(404).json({
+    return res.status(400).json({
       status: "Fail",
       message: error.message,
     });

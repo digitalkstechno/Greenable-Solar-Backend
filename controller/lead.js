@@ -19,6 +19,28 @@ exports.createLead = async (req, res) => {
   try {
     const leadData = { ...req.body };
 
+    // Check contact uniqueness
+    if (leadData.contact && leadData.contact.trim() !== "") {
+      const duplicateContact = await LEAD.findOne({ contact: leadData.contact.trim() });
+      if (duplicateContact) {
+        return res.status(400).json({
+          status: "Fail",
+          message: "Mobile number already exists",
+        });
+      }
+    }
+
+    // Check email uniqueness
+    if (leadData.email && leadData.email.trim() !== "") {
+      const duplicateEmail = await LEAD.findOne({ email: leadData.email.trim().toLowerCase() });
+      if (duplicateEmail) {
+        return res.status(400).json({
+          status: "Fail",
+          message: "Email address already exists",
+        });
+      }
+    }
+
     // Sanitize ObjectIds
     const sanitizedLeadStatus = sanitizeObjectId(leadData.leadStatus);
     if (sanitizedLeadStatus !== undefined) leadData.leadStatus = sanitizedLeadStatus;
@@ -250,6 +272,34 @@ exports.leadUpdate = async (req, res) => {
     }
 
     const updateData = { ...req.body };
+
+    // Check contact uniqueness (excluding current lead)
+    if (updateData.contact && updateData.contact.trim() !== "") {
+      const duplicateContact = await LEAD.findOne({
+        contact: updateData.contact.trim(),
+        _id: { $ne: leadId }
+      });
+      if (duplicateContact) {
+        return res.status(400).json({
+          status: "Fail",
+          message: "Mobile number already exists",
+        });
+      }
+    }
+
+    // Check email uniqueness (excluding current lead)
+    if (updateData.email && updateData.email.trim() !== "") {
+      const duplicateEmail = await LEAD.findOne({
+        email: updateData.email.trim().toLowerCase(),
+        _id: { $ne: leadId }
+      });
+      if (duplicateEmail) {
+        return res.status(400).json({
+          status: "Fail",
+          message: "Email address already exists",
+        });
+      }
+    }
 
     // Sanitize ObjectIds
     const sanitizedStatus = sanitizeObjectId(updateData.leadStatus);
@@ -1710,6 +1760,20 @@ exports.bulkImportLeads = async (req, res) => {
     const insertErrors = [];
     for (const leadData of successRows) {
       try {
+        // Check uniqueness during import
+        if (leadData.contact && leadData.contact.trim() !== "") {
+          const duplicateContact = await LEAD.findOne({ contact: leadData.contact.trim() });
+          if (duplicateContact) {
+            throw new Error("Mobile number already exists");
+          }
+        }
+        if (leadData.email && leadData.email.trim() !== "") {
+          const duplicateEmail = await LEAD.findOne({ email: leadData.email.trim().toLowerCase() });
+          if (duplicateEmail) {
+            throw new Error("Email address already exists");
+          }
+        }
+
         const lead = await LEAD.create(leadData);
         await incrementCount({ statusId: lead.leadStatus });
         imported++;
