@@ -7,13 +7,20 @@ exports.createCategory = async (req, res) => {
       return res.status(400).json({ message: "Category name is required" });
     }
 
+    const existing = await CATEGORY.findOne({
+      name: { $regex: new RegExp(`^${name.trim()}$`, "i") }
+    });
+    if (existing) {
+      return res.status(400).json({ message: "Category with this name already exists" });
+    }
+
     const newCategory = await CATEGORY.create({ name });
     res.status(201).json({
       message: "Category created successfully",
       data: newCategory,
     });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(400).json({ message: error.message });
   }
 };
 
@@ -54,6 +61,14 @@ exports.updateCategory = async (req, res) => {
       return res.status(400).json({ message: "Category name is required" });
     }
 
+    const existing = await CATEGORY.findOne({
+      name: { $regex: new RegExp(`^${name.trim()}$`, "i") },
+      _id: { $ne: id }
+    });
+    if (existing) {
+      return res.status(400).json({ message: "Category with this name already exists" });
+    }
+
     const category = await CATEGORY.findByIdAndUpdate(
       id,
       { name },
@@ -69,7 +84,7 @@ exports.updateCategory = async (req, res) => {
       data: category,
     });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(400).json({ message: error.message });
   }
 };
 

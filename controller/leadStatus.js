@@ -3,13 +3,25 @@ const LEADSTATUS = require("../model/leadStatus");
 exports.createLeadStatus = async (req, res) => {
   try {
     let leadStatusCreate = req.body;
+    if (!leadStatusCreate.name) {
+      return res.status(400).json({ status: "Fail", message: "Name is required" });
+    }
+    const existing = await LEADSTATUS.findOne({
+      name: { $regex: new RegExp(`^${leadStatusCreate.name.trim()}$`, "i") }
+    });
+    if (existing) {
+      return res.status(400).json({
+        status: "Fail",
+        message: "Lead status with this name already exists"
+      });
+    }
     let newLeadStatus = await LEADSTATUS.create(leadStatusCreate);
     res.status(201).json({
       status: "Success",
       data: newLeadStatus,
     });
   } catch (error) {
-    res.status(404).json({
+    res.status(400).json({
       status: "Fail",
       message: error.message,
     });
@@ -95,6 +107,18 @@ exports.LeadStatusUpdate = async (req, res) => {
     if (!oldLeadStatus) {
       throw new Error("Lead Status not found");
     }
+    if (req.body.name) {
+      const existing = await LEADSTATUS.findOne({
+        name: { $regex: new RegExp(`^${req.body.name.trim()}$`, "i") },
+        _id: { $ne: StatusId }
+      });
+      if (existing) {
+        return res.status(400).json({
+          status: "Fail",
+          message: "Lead status with this name already exists"
+        });
+      }
+    }
     let updatedStatus = await LEADSTATUS.findByIdAndUpdate(StatusId, req.body, {
       new: true,
     });
@@ -104,7 +128,7 @@ exports.LeadStatusUpdate = async (req, res) => {
       data: updatedStatus,
     });
   } catch (error) {
-    return res.status(404).json({
+    return res.status(400).json({
       status: "Fail",
       message: error.message,
     });
@@ -119,7 +143,15 @@ exports.LeadStatusDelete = async (req, res) => {
     if (!oldLeadStatus) {
       throw new Error("Lead Status not found");
     }
+    const deletedOrder = oldLeadStatus.order;
     await LEADSTATUS.findByIdAndDelete(StatusId);
+
+    if (typeof deletedOrder === 'number') {
+      await LEADSTATUS.updateMany(
+        { order: { $gt: deletedOrder } },
+        { $inc: { order: -1 } }
+      );
+    }
 
     return res.status(200).json({
       status: "Success",

@@ -7,13 +7,21 @@ exports.createProduct = async (req, res) => {
       return res.status(400).json({ message: "Category and Product name are required" });
     }
 
+    const existing = await PRODUCT.findOne({
+      categoryId,
+      name: { $regex: new RegExp(`^${name.trim()}$`, "i") }
+    });
+    if (existing) {
+      return res.status(400).json({ message: "Product with this name already exists in this category" });
+    }
+
     const newProduct = await PRODUCT.create({ categoryId, name });
     res.status(201).json({
       message: "Product created successfully",
       data: newProduct,
     });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(400).json({ message: error.message });
   }
 };
 
@@ -59,6 +67,15 @@ exports.updateProduct = async (req, res) => {
       return res.status(400).json({ message: "Category and Product name are required" });
     }
 
+    const existing = await PRODUCT.findOne({
+      categoryId,
+      name: { $regex: new RegExp(`^${name.trim()}$`, "i") },
+      _id: { $ne: id }
+    });
+    if (existing) {
+      return res.status(400).json({ message: "Product with this name already exists in this category" });
+    }
+
     const product = await PRODUCT.findByIdAndUpdate(
       id,
       { categoryId, name },
@@ -74,7 +91,7 @@ exports.updateProduct = async (req, res) => {
       data: product,
     });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(400).json({ message: error.message });
   }
 };
 
