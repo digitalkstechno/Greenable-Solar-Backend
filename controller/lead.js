@@ -193,13 +193,58 @@ exports.fetchAllLeads = async (req, res) => {
     ====================== */
     const totalLeads = await LEAD.countDocuments(query);
 
+    let totals = null;
+    const LeadStatus = require("../model/leadStatus");
+    const isWonFilter = status && await LeadStatus.find({ _id: { $in: status.split(',') }, name: { $regex: /^won$/i } }).then(res => res.length > 0);
+    
+    if (isWonFilter) {
+      const totalStats = await LEAD.aggregate([
+        { $match: query },
+        {
+          $lookup: {
+            from: "projectdetails",
+            localField: "_id",
+            foreignField: "lead",
+            as: "projectDetail"
+          }
+        },
+        { $unwind: { path: "$projectDetail", preserveNullAndEmptyArrays: true } },
+        {
+          $group: {
+            _id: null,
+            totalKwReq: { $sum: { $convert: { input: "$kwRequirement", to: "double", onError: 0, onNull: 0 } } },
+            totalProjectAmount: { $sum: "$projectDetail.projectAmount" },
+            totalPaymentAmount: { $sum: "$paymentAmount" }
+          }
+        }
+      ]);
+      const stats = totalStats[0] || { totalKwReq: 0, totalProjectAmount: 0, totalPaymentAmount: 0 };
+      totals = {
+        totalKwReq: stats.totalKwReq || 0,
+        totalAmount: stats.totalProjectAmount || 0,
+        totalPendingAmount: (stats.totalProjectAmount || 0) - (stats.totalPaymentAmount || 0)
+      };
+    }
+
     const LeadData = await LEAD.find(query)
       .skip(skip)
       .limit(limit)
       .sort({ createdAt: -1 })
       .populate("leadStatus")
       .populate("assignedTo")
-      .populate("followUps.staff", "fullName email");
+      .populate("followUps.staff", "fullName email")
+      .lean();
+
+    const leadIds = LeadData.map(l => l._id);
+    const projectDetails = await require("../model/projectDetail").find({ lead: { $in: leadIds } }).lean();
+    const pdMap = {};
+    projectDetails.forEach(pd => pdMap[pd.lead] = pd);
+    
+    LeadData.forEach(l => {
+      l.projectDetail = pdMap[l._id] || null;
+      l.projectAmount = l.projectDetail ? (l.projectDetail.projectAmount || 0) : 0;
+      l.pendingAmount = l.projectAmount - (l.paymentAmount || 0);
+    });
 
     return res.status(200).json({
       status: "Success",
@@ -211,6 +256,7 @@ exports.fetchAllLeads = async (req, res) => {
         limit,
       },
       data: LeadData,
+      totals: totals
     });
   } catch (error) {
     return res.status(500).json({
@@ -616,18 +662,67 @@ exports.fetchKanbanLeadsByStatus = async (req, res) => {
     }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
+    
+    let totals = null;
+    const LeadStatus = require("../model/leadStatus");
+    const isWonFilter = await LeadStatus.findOne({ _id: statusId, name: { $regex: /^won$/i } });
+
+    if (isWonFilter) {
+      const totalStats = await LEAD.aggregate([
+        { $match: match },
+        {
+          $lookup: {
+            from: "projectdetails",
+            localField: "_id",
+            foreignField: "lead",
+            as: "projectDetail"
+          }
+        },
+        { $unwind: { path: "$projectDetail", preserveNullAndEmptyArrays: true } },
+        {
+          $group: {
+            _id: null,
+            totalKwReq: { $sum: { $convert: { input: "$kwRequirement", to: "double", onError: 0, onNull: 0 } } },
+            totalProjectAmount: { $sum: "$projectDetail.projectAmount" },
+            totalPaymentAmount: { $sum: "$paymentAmount" }
+          }
+        }
+      ]);
+      const stats = totalStats[0] || { totalKwReq: 0, totalProjectAmount: 0, totalPaymentAmount: 0 };
+      totals = {
+        totalKwReq: stats.totalKwReq || 0,
+        totalAmount: stats.totalProjectAmount || 0,
+        totalPendingAmount: (stats.totalProjectAmount || 0) - (stats.totalPaymentAmount || 0)
+      };
+    }
+
     const leads = await LEAD.find(match)
       .populate("leadStatus")
       .populate("assignedTo")
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(parseInt(limit));
+      .limit(parseInt(limit))
+      .lean();
+
+    if (isWonFilter) {
+      const leadIds = leads.map(l => l._id);
+      const projectDetails = await require("../model/projectDetail").find({ lead: { $in: leadIds } }).lean();
+      const pdMap = {};
+      projectDetails.forEach(pd => pdMap[pd.lead] = pd);
+      
+      leads.forEach(l => {
+        l.projectDetail = pdMap[l._id] || null;
+        l.projectAmount = l.projectDetail ? (l.projectDetail.projectAmount || 0) : 0;
+        l.pendingAmount = l.projectAmount - (l.paymentAmount || 0);
+      });
+    }
 
     const total = await LEAD.countDocuments(match);
 
     return res.status(200).json({
       status: "Success",
       data: leads,
+      totals: totals,
       pagination: {
         totalRecords: total,
         currentPage: parseInt(page),
@@ -1221,13 +1316,53 @@ exports.getWonLeads = async (req, res) => {
 
     const total = await LEAD.countDocuments(query);
 
+    const totalStats = await LEAD.aggregate([
+      { $match: query },
+      {
+        $lookup: {
+          from: "projectdetails",
+          localField: "_id",
+          foreignField: "lead",
+          as: "projectDetail"
+        }
+      },
+      { $unwind: { path: "$projectDetail", preserveNullAndEmptyArrays: true } },
+      {
+        $group: {
+          _id: null,
+          totalKwReq: { $sum: { $convert: { input: "$kwRequirement", to: "double", onError: 0, onNull: 0 } } },
+          totalProjectAmount: { $sum: "$projectDetail.projectAmount" },
+          totalPaymentAmount: { $sum: "$paymentAmount" }
+        }
+      }
+    ]);
+
+    const stats = totalStats[0] || { totalKwReq: 0, totalProjectAmount: 0, totalPaymentAmount: 0 };
+    const totals = {
+      totalKwReq: stats.totalKwReq || 0,
+      totalAmount: stats.totalProjectAmount || 0,
+      totalPendingAmount: (stats.totalProjectAmount || 0) - (stats.totalPaymentAmount || 0)
+    };
+
     const leads = await LEAD.find(query)
       .populate("leadStatus")
       .populate("assignedTo")
       .populate("leadLabel")
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(limit);
+      .limit(limit)
+      .lean();
+
+    const leadIds = leads.map(l => l._id);
+    const projectDetails = await require("../model/projectDetail").find({ lead: { $in: leadIds } }).lean();
+    const pdMap = {};
+    projectDetails.forEach(pd => pdMap[pd.lead] = pd);
+    
+    leads.forEach(l => {
+      l.projectDetail = pdMap[l._id] || null;
+      l.projectAmount = l.projectDetail ? (l.projectDetail.projectAmount || 0) : 0;
+      l.pendingAmount = l.projectAmount - (l.paymentAmount || 0);
+    });
 
     return res.status(200).json({
       status: "Success",
@@ -1239,6 +1374,7 @@ exports.getWonLeads = async (req, res) => {
         limit,
       },
       data: leads,
+      totals: totals
     });
   } catch (error) {
     return res.status(500).json({
