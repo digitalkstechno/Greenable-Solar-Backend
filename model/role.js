@@ -10,12 +10,6 @@ let RoleSchema = new Schema(
     },
     permissions: [
       {
-        setup: {
-          create: { type: Boolean, default: false },
-          readAll: { type: Boolean, default: false },
-          update: { type: Boolean, default: false },
-          delete: { type: Boolean, default: false },
-        },
         lead: {
           create: { type: Boolean, default: false },
           readOwn: { type: Boolean, default: false },
