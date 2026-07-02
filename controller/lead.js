@@ -761,6 +761,19 @@ exports.updateKanbanStatus = async (req, res) => {
       
       const newStatusObj = await LeadStatus.findById(leadStatus);
       if (newStatusObj) {
+
+        if (newStatusObj.name.match(/^won$/i)) {
+          oldLead.isWon = true;
+          oldLead.isLost = false;
+          oldLead.wonDate = new Date();
+        } else if (newStatusObj.name.match(/^lost$/i)) {
+          oldLead.isLost = true;
+          oldLead.isWon = false;
+        } else {
+          oldLead.isWon = false;
+          oldLead.isLost = false;
+        }
+
         oldLead.activities = oldLead.activities || [];
         oldLead.activities.push({
           message: `Stage changed to ${newStatusObj.name}`,
