@@ -64,6 +64,10 @@ exports.createLead = async (req, res) => {
       leadData.attachments = newAttachments;
     }
 
+    if (req.user && req.user._id) {
+      leadData.createdBy = req.user._id;
+    }
+
     leadData.activities = [
       {
         message: "New Lead Created",
@@ -83,7 +87,7 @@ exports.createLead = async (req, res) => {
       await Notification.create({
         recipient: leadDetails.assignedTo,
         title: "New Lead Assigned",
-        message: `You have been assigned to a new lead: ${leadDetails.fullName}`,
+        message: `You have been assigned to a new lead. Lead Name: ${leadDetails.fullName}`,
         type: "lead",
         relatedId: leadDetails._id,
         isRead: false,
@@ -127,14 +131,17 @@ exports.fetchAllLeads = async (req, res) => {
     /* =====================
        SEARCH (TEXT)
     ====================== */
+    const andConditions = [];
     if (search) {
-      query.$or = [
-        { fullName: { $regex: search, $options: "i" } },
-        { email: { $regex: search, $options: "i" } },
-        { phone: { $regex: search, $options: "i" } },
-        { kwRequirement: { $regex: search, $options: "i" } },
-        { discomName: { $regex: search, $options: "i" } },
-      ];
+      andConditions.push({
+        $or: [
+          { fullName: { $regex: search, $options: "i" } },
+          { email: { $regex: search, $options: "i" } },
+          { phone: { $regex: search, $options: "i" } },
+          { kwRequirement: { $regex: search, $options: "i" } },
+          { discomName: { $regex: search, $options: "i" } },
+        ]
+      });
     }
 
     /* =====================
@@ -185,7 +192,16 @@ exports.fetchAllLeads = async (req, res) => {
     }
 
     if (req.leadScope === "own" && req.user && req.user._id) {
-      query.assignedTo = req.user._id;
+      andConditions.push({
+        $or: [
+          { assignedTo: req.user._id },
+          { createdBy: req.user._id }
+        ]
+      });
+    }
+
+    if (andConditions.length > 0) {
+      query.$and = andConditions;
     }
 
     /* =====================
@@ -193,13 +209,59 @@ exports.fetchAllLeads = async (req, res) => {
     ====================== */
     const totalLeads = await LEAD.countDocuments(query);
 
+    let totals = null;
+    const LeadStatus = require("../model/leadStatus");
+    const isWonFilter = status && await LeadStatus.find({ _id: { $in: status.split(',') }, name: { $regex: /^won$/i } }).then(res => res.length > 0);
+    
+    if (isWonFilter) {
+      const totalStats = await LEAD.aggregate([
+        { $match: query },
+        {
+          $lookup: {
+            from: "projectdetails",
+            localField: "_id",
+            foreignField: "lead",
+            as: "projectDetail"
+          }
+        },
+        { $unwind: { path: "$projectDetail", preserveNullAndEmptyArrays: true } },
+        {
+          $group: {
+            _id: null,
+            totalKwReq: { $sum: { $convert: { input: "$kwRequirement", to: "double", onError: 0, onNull: 0 } } },
+            totalProjectAmount: { $sum: "$projectDetail.projectAmount" },
+            totalPaymentAmount: { $sum: "$paymentAmount" }
+          }
+        }
+      ]);
+      const stats = totalStats[0] || { totalKwReq: 0, totalProjectAmount: 0, totalPaymentAmount: 0 };
+      totals = {
+        totalKwReq: stats.totalKwReq || 0,
+        totalAmount: stats.totalProjectAmount || 0,
+        totalPendingAmount: (stats.totalProjectAmount || 0) - (stats.totalPaymentAmount || 0)
+      };
+    }
+
     const LeadData = await LEAD.find(query)
       .skip(skip)
       .limit(limit)
       .sort({ createdAt: -1 })
       .populate("leadStatus")
       .populate("assignedTo")
-      .populate("followUps.staff", "fullName email");
+      .populate("createdBy")
+      .populate("followUps.staff", "fullName email")
+      .lean();
+
+    const leadIds = LeadData.map(l => l._id);
+    const projectDetails = await require("../model/projectDetail").find({ lead: { $in: leadIds } }).lean();
+    const pdMap = {};
+    projectDetails.forEach(pd => pdMap[pd.lead] = pd);
+    
+    LeadData.forEach(l => {
+      l.projectDetail = pdMap[l._id] || null;
+      l.projectAmount = l.projectDetail ? (l.projectDetail.projectAmount || 0) : 0;
+      l.pendingAmount = l.projectAmount - (l.paymentAmount || 0);
+    });
 
     return res.status(200).json({
       status: "Success",
@@ -211,6 +273,7 @@ exports.fetchAllLeads = async (req, res) => {
         limit,
       },
       data: LeadData,
+      totals: totals
     });
   } catch (error) {
     return res.status(500).json({
@@ -231,6 +294,7 @@ exports.fetchLeadById = async (req, res) => {
     let leadData = await LEAD.findById(LeadId)
       .populate({ path: "leadStatus" })
       .populate({ path: "assignedTo" })
+      .populate({ path: "createdBy" })
       .populate({ path: "followUps.staff", select: "fullName email" });
     if (!leadData) {
       throw new Error("Lead not found");
@@ -239,9 +303,10 @@ exports.fetchLeadById = async (req, res) => {
     if (
       req.leadScope === "own" &&
       req.user &&
-      leadData.assignedTo &&
-      leadData.assignedTo._id &&
-      String(leadData.assignedTo._id) !== String(req.user._id)
+      (
+        (!leadData.assignedTo || !leadData.assignedTo._id || String(leadData.assignedTo._id) !== String(req.user._id)) &&
+        (!leadData.createdBy || String(leadData.createdBy) !== String(req.user._id))
+      )
     ) {
       return res.status(403).json({
         status: "Fail",
@@ -493,20 +558,32 @@ exports.fetchLeadsForKanban = async (req, res) => {
     const { search, status, staff, date } = req.query;
 
     const match = {};
+    const andConditions = [];
     const myOnly = req.query.my === 'true';
     if ((req.leadScope === "own" || myOnly) && req.user && req.user._id) {
-      match.assignedTo = req.user._id;
+      andConditions.push({
+        $or: [
+          { assignedTo: req.user._id },
+          { createdBy: req.user._id }
+        ]
+      });
     }
 
     // 🔥 SEARCH FILTER
     if (search) {
-      match.$or = [
-        { fullName: { $regex: search, $options: "i" } },
-        { email: { $regex: search, $options: "i" } },
-        { phone: { $regex: search, $options: "i" } },
-        { kwRequirement: { $regex: search, $options: "i" } },
-        { discomName: { $regex: search, $options: "i" } },
-      ];
+      andConditions.push({
+        $or: [
+          { fullName: { $regex: search, $options: "i" } },
+          { email: { $regex: search, $options: "i" } },
+          { phone: { $regex: search, $options: "i" } },
+          { kwRequirement: { $regex: search, $options: "i" } },
+          { discomName: { $regex: search, $options: "i" } },
+        ]
+      });
+    }
+
+    if (andConditions.length > 0) {
+      match.$and = andConditions;
     }
 
     // 🔥 STATUS FILTER (handle comma-separated values)
@@ -556,6 +633,7 @@ exports.fetchLeadsForKanban = async (req, res) => {
         const leads = await LEAD.find(leadMatch)
           .populate("leadStatus")
           .populate("assignedTo")
+          .populate("createdBy")
           .sort({ createdAt: -1 })
           .limit(10);
 
@@ -585,18 +663,30 @@ exports.fetchKanbanLeadsByStatus = async (req, res) => {
     const { statusId, search, staff, date, page = 1, limit = 10 } = req.query;
     const match = { leadStatus: statusId };
     const myOnly = req.query.my === 'true';
+    const andConditions = [];
 
     if ((req.leadScope === "own" || myOnly) && req.user && req.user._id) {
-      match.assignedTo = req.user._id;
+      andConditions.push({
+        $or: [
+          { assignedTo: req.user._id },
+          { createdBy: req.user._id }
+        ]
+      });
     }
 
     if (search) {
-      match.$or = [
-        { fullName: { $regex: search, $options: "i" } },
-        { email: { $regex: search, $options: "i" } },
-        { phone: { $regex: search, $options: "i" } },
-        { kwRequirement: { $regex: search, $options: "i" } },
-      ];
+      andConditions.push({
+        $or: [
+          { fullName: { $regex: search, $options: "i" } },
+          { email: { $regex: search, $options: "i" } },
+          { phone: { $regex: search, $options: "i" } },
+          { kwRequirement: { $regex: search, $options: "i" } },
+        ]
+      });
+    }
+
+    if (andConditions.length > 0) {
+      match.$and = andConditions;
     }
 
 
@@ -616,18 +706,68 @@ exports.fetchKanbanLeadsByStatus = async (req, res) => {
     }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
+    
+    let totals = null;
+    const LeadStatus = require("../model/leadStatus");
+    const isWonFilter = await LeadStatus.findOne({ _id: statusId, name: { $regex: /^won$/i } });
+
+    if (isWonFilter) {
+      const totalStats = await LEAD.aggregate([
+        { $match: match },
+        {
+          $lookup: {
+            from: "projectdetails",
+            localField: "_id",
+            foreignField: "lead",
+            as: "projectDetail"
+          }
+        },
+        { $unwind: { path: "$projectDetail", preserveNullAndEmptyArrays: true } },
+        {
+          $group: {
+            _id: null,
+            totalKwReq: { $sum: { $convert: { input: "$kwRequirement", to: "double", onError: 0, onNull: 0 } } },
+            totalProjectAmount: { $sum: "$projectDetail.projectAmount" },
+            totalPaymentAmount: { $sum: "$paymentAmount" }
+          }
+        }
+      ]);
+      const stats = totalStats[0] || { totalKwReq: 0, totalProjectAmount: 0, totalPaymentAmount: 0 };
+      totals = {
+        totalKwReq: stats.totalKwReq || 0,
+        totalAmount: stats.totalProjectAmount || 0,
+        totalPendingAmount: (stats.totalProjectAmount || 0) - (stats.totalPaymentAmount || 0)
+      };
+    }
+
     const leads = await LEAD.find(match)
       .populate("leadStatus")
       .populate("assignedTo")
+      .populate("createdBy")
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(parseInt(limit));
+      .limit(parseInt(limit))
+      .lean();
+
+    if (isWonFilter) {
+      const leadIds = leads.map(l => l._id);
+      const projectDetails = await require("../model/projectDetail").find({ lead: { $in: leadIds } }).lean();
+      const pdMap = {};
+      projectDetails.forEach(pd => pdMap[pd.lead] = pd);
+      
+      leads.forEach(l => {
+        l.projectDetail = pdMap[l._id] || null;
+        l.projectAmount = l.projectDetail ? (l.projectDetail.projectAmount || 0) : 0;
+        l.pendingAmount = l.projectAmount - (l.paymentAmount || 0);
+      });
+    }
 
     const total = await LEAD.countDocuments(match);
 
     return res.status(200).json({
       status: "Success",
       data: leads,
+      totals: totals,
       pagination: {
         totalRecords: total,
         currentPage: parseInt(page),
@@ -666,6 +806,19 @@ exports.updateKanbanStatus = async (req, res) => {
       
       const newStatusObj = await LeadStatus.findById(leadStatus);
       if (newStatusObj) {
+
+        if (newStatusObj.name.match(/^won$/i)) {
+          oldLead.isWon = true;
+          oldLead.isLost = false;
+          oldLead.wonDate = new Date();
+        } else if (newStatusObj.name.match(/^lost$/i)) {
+          oldLead.isLost = true;
+          oldLead.isWon = false;
+        } else {
+          oldLead.isWon = false;
+          oldLead.isLost = false;
+        }
+
         oldLead.activities = oldLead.activities || [];
         oldLead.activities.push({
           message: `Stage changed to ${newStatusObj.name}`,
@@ -779,19 +932,30 @@ exports.getLeadCountSummary = async (req, res) => {
 
     const baseMatch = {};
     const myOnly = req.query.my === 'true';
+    const andConditions = [];
     if ((req.leadScope === "own" || myOnly) && req.user && req.user._id) {
-      baseMatch.assignedTo = req.user._id;
+      andConditions.push({
+        $or: [
+          { assignedTo: req.user._id },
+          { createdBy: req.user._id }
+        ]
+      });
     }
 
-    // 🔥 SEARCH FILTER
     if (search) {
-      baseMatch.$or = [
-        { fullName: { $regex: search, $options: "i" } },
-        { email: { $regex: search, $options: "i" } },
-        { phone: { $regex: search, $options: "i" } },
-        { kwRequirement: { $regex: search, $options: "i" } },
-        { discomName: { $regex: search, $options: "i" } },
-      ];
+      andConditions.push({
+        $or: [
+          { fullName: { $regex: search, $options: "i" } },
+          { email: { $regex: search, $options: "i" } },
+          { phone: { $regex: search, $options: "i" } },
+          { kwRequirement: { $regex: search, $options: "i" } },
+          { discomName: { $regex: search, $options: "i" } },
+        ]
+      });
+    }
+
+    if (andConditions.length > 0) {
+      baseMatch.$and = andConditions;
     }
 
 
@@ -1227,13 +1391,54 @@ exports.getWonLeads = async (req, res) => {
 
     const total = await LEAD.countDocuments(query);
 
+    const totalStats = await LEAD.aggregate([
+      { $match: query },
+      {
+        $lookup: {
+          from: "projectdetails",
+          localField: "_id",
+          foreignField: "lead",
+          as: "projectDetail"
+        }
+      },
+      { $unwind: { path: "$projectDetail", preserveNullAndEmptyArrays: true } },
+      {
+        $group: {
+          _id: null,
+          totalKwReq: { $sum: { $convert: { input: "$kwRequirement", to: "double", onError: 0, onNull: 0 } } },
+          totalProjectAmount: { $sum: "$projectDetail.projectAmount" },
+          totalPaymentAmount: { $sum: "$paymentAmount" }
+        }
+      }
+    ]);
+
+    const stats = totalStats[0] || { totalKwReq: 0, totalProjectAmount: 0, totalPaymentAmount: 0 };
+    const totals = {
+      totalKwReq: stats.totalKwReq || 0,
+      totalAmount: stats.totalProjectAmount || 0,
+      totalPendingAmount: (stats.totalProjectAmount || 0) - (stats.totalPaymentAmount || 0)
+    };
+
     const leads = await LEAD.find(query)
       .populate("leadStatus")
       .populate("assignedTo")
+      .populate("createdBy")
       .populate("leadLabel")
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(limit);
+      .limit(limit)
+      .lean();
+
+    const leadIds = leads.map(l => l._id);
+    const projectDetails = await require("../model/projectDetail").find({ lead: { $in: leadIds } }).lean();
+    const pdMap = {};
+    projectDetails.forEach(pd => pdMap[pd.lead] = pd);
+    
+    leads.forEach(l => {
+      l.projectDetail = pdMap[l._id] || null;
+      l.projectAmount = l.projectDetail ? (l.projectDetail.projectAmount || 0) : 0;
+      l.pendingAmount = l.projectAmount - (l.paymentAmount || 0);
+    });
 
     return res.status(200).json({
       status: "Success",
@@ -1245,6 +1450,7 @@ exports.getWonLeads = async (req, res) => {
         limit,
       },
       data: leads,
+      totals: totals
     });
   } catch (error) {
     return res.status(500).json({
@@ -1320,6 +1526,7 @@ exports.getLostLeads = async (req, res) => {
     const leads = await LEAD.find(query)
       .populate("leadStatus")
       .populate("assignedTo")
+      .populate("createdBy")
       .populate("leadLabel")
       .sort({ createdAt: -1 })
       .skip(skip)
