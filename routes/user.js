@@ -15,13 +15,12 @@ router.get("/me", authMiddleware, getCurrentUser);
 router.get(
   "/",
   authMiddleware,
-  authorize("setup", "readAll"),
   fetchAllUsers,
 );
 router.get(
   "/:id",
   authMiddleware,
-  authorize("setup", "readAll"),
+  authorize("staff", "readAll"),
   fetchUserById,
 );
 router.put(

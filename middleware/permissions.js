@@ -2,30 +2,33 @@ function getRolePermissions(role) {
   if (!role || !Array.isArray(role.permissions) || role.permissions.length === 0) {
     return {};
   }
-  return role.permissions[0] || {};
+  const perms = role.permissions[0];
+  if (!perms) return {};
+ 
+  return typeof perms.toObject === 'function' ? perms.toObject() : JSON.parse(JSON.stringify(perms));
 }
 
 function authorize(feature, action) {
   return (req, res, next) => {
-    // const user = req.user;
-    // if (!user || !user.role) {
-    //   return res.status(403).json({
-    //     status: "Fail",
-    //     message: "Access denied",
-    //   });
-    // }
+    const user = req.user;
+    if (!user || !user.role) {
+      return res.status(403).json({ status: "Fail", message: "Access denied" });
+    }
 
-    // const perms = getRolePermissions(user.role);
-    // const featurePerms = perms[feature];
+    
+    if (user.role.roleName && user.role.roleName.toLowerCase() === 'super admin') {
+      return next();
+    }
 
-    // if (!featurePerms || !featurePerms[action]) {
-    //   return res.status(403).json({
-    //     status: "Fail",
-    //     message: "Access denied",
-    //   });
-    // }
+    const perms = getRolePermissions(user.role);
+    const featurePerms = perms[feature];
 
-    next();
+  
+    if (featurePerms && featurePerms[action] == true) {
+      return next();
+    }
+
+    return res.status(403).json({ status: "Fail", message: "Access denied" });
   };
 }
 
@@ -37,6 +40,12 @@ function leadReadScope() {
         status: "Fail",
         message: "Access denied",
       });
+    }
+
+ 
+    if (user.role.roleName && user.role.roleName.toLowerCase() === 'super admin') {
+      req.leadScope = "all";
+      return next();
     }
 
     const perms = getRolePermissions(user.role);
