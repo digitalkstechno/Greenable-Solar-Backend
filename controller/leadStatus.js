@@ -1,4 +1,5 @@
 const LEADSTATUS = require("../model/leadStatus");
+const LEAD = require("../model/lead");
 
 exports.createLeadStatus = async (req, res) => {
   try {
@@ -30,6 +31,13 @@ exports.createLeadStatus = async (req, res) => {
 
 exports.fetchAllLeadStatus = async (req, res) => {
   try {
+
+    const allStatuses = await LEADSTATUS.find();
+    for (const status of allStatuses) {
+      const actualCount = await LEAD.countDocuments({ leadStatus: status._id });
+      await LEADSTATUS.findByIdAndUpdate(status._id, { count: actualCount });
+    }
+
     const search = req.query.search || "";
 
     const query = {
