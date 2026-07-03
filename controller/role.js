@@ -94,10 +94,11 @@ exports.roleUpdate = async (req, res) => {
         message: "Role not found",
       });
     }
-    if (req.body.roleName && req.body.roleName.trim().toLowerCase() !== oldRole.roleName.toLowerCase()) {
+    const oldName = oldRole.roleName || oldRole.name || "";
+    if (req.body.roleName && oldName && req.body.roleName.trim().toLowerCase() !== oldName.toLowerCase()) {
       const existingRole = await ROLE.findOne({
-        roleName: req.body.roleName.trim(),
-      }).collation({ locale: "en", strength: 2 });
+        roleName: { $regex: new RegExp(`^${req.body.roleName.trim()}$`, "i") },
+      });
       if (existingRole) {
         return res.status(400).json({
           status: "Fail",

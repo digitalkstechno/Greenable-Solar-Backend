@@ -80,7 +80,7 @@ exports.createLead = async (req, res) => {
 
     await incrementCount({
       statusId: leadDetails.leadStatus,
-      
+
     });
 
     if (leadDetails.assignedTo && (!req.user || String(leadDetails.assignedTo) !== String(req.user._id))) {
@@ -212,7 +212,7 @@ exports.fetchAllLeads = async (req, res) => {
     let totals = null;
     const LeadStatus = require("../model/leadStatus");
     const isWonFilter = status && await LeadStatus.find({ _id: { $in: status.split(',') }, name: { $regex: /^won$/i } }).then(res => res.length > 0);
-    
+
     if (isWonFilter) {
       const totalStats = await LEAD.aggregate([
         { $match: query },
@@ -256,7 +256,7 @@ exports.fetchAllLeads = async (req, res) => {
     const projectDetails = await require("../model/projectDetail").find({ lead: { $in: leadIds } }).lean();
     const pdMap = {};
     projectDetails.forEach(pd => pdMap[pd.lead] = pd);
-    
+
     LeadData.forEach(l => {
       l.projectDetail = pdMap[l._id] || null;
       l.projectAmount = l.projectDetail ? (l.projectDetail.projectAmount || 0) : 0;
@@ -389,15 +389,15 @@ exports.leadUpdate = async (req, res) => {
         const id = att._id?.toString() || att.path;
         return deleteIds.includes(id);
       });
-      
+
       for (const att of attachmentsToDelete) {
-         if (att.path && att.path.startsWith('http')) {
-             await deleteFileFromExternalService(att.path).catch(console.error);
-         } else if (att.filename) {
-             deleteUploadedFile("images/LeadAttachment", att.filename);
-         }
+        if (att.path && att.path.startsWith('http')) {
+          await deleteFileFromExternalService(att.path).catch(console.error);
+        } else if (att.filename) {
+          deleteUploadedFile("images/LeadAttachment", att.filename);
+        }
       }
-      
+
       currentAttachments = currentAttachments.filter(att => {
         const id = att._id?.toString() || att.path;
         return !deleteIds.includes(id);
@@ -445,7 +445,7 @@ exports.leadUpdate = async (req, res) => {
     if (updateData.followUps && Array.isArray(updateData.followUps) && oldLeads.followUps && updateData.followUps.length > oldLeads.followUps.length) {
       updateData.lastFollowUp = new Date();
       const latestFollowUp = updateData.followUps[updateData.followUps.length - 1];
-      const datePart = latestFollowUp.date ? (typeof latestFollowUp.date === 'string' ? latestFollowUp.date.substring(0,10) : latestFollowUp.date.toISOString().substring(0,10)) : '';
+      const datePart = latestFollowUp.date ? (typeof latestFollowUp.date === 'string' ? latestFollowUp.date.substring(0, 10) : latestFollowUp.date.toISOString().substring(0, 10)) : '';
       newActivities.push({
         message: `Follow-up added for ${datePart}${latestFollowUp.note ? ' | Note: ' + latestFollowUp.note : ''}`,
         by: req.user ? req.user._id : undefined,
@@ -536,7 +536,7 @@ exports.leadDelete = async (req, res) => {
 
     await decrementCount({
       statusId: oldLead.leadStatus,
-      
+
     });
 
     await LEAD.findByIdAndDelete(leadId);
@@ -706,7 +706,7 @@ exports.fetchKanbanLeadsByStatus = async (req, res) => {
     }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
-    
+
     let totals = null;
     const LeadStatus = require("../model/leadStatus");
     const isWonFilter = await LeadStatus.findOne({ _id: statusId, name: { $regex: /^won$/i } });
@@ -754,7 +754,7 @@ exports.fetchKanbanLeadsByStatus = async (req, res) => {
       const projectDetails = await require("../model/projectDetail").find({ lead: { $in: leadIds } }).lean();
       const pdMap = {};
       projectDetails.forEach(pd => pdMap[pd.lead] = pd);
-      
+
       leads.forEach(l => {
         l.projectDetail = pdMap[l._id] || null;
         l.projectAmount = l.projectDetail ? (l.projectDetail.projectAmount || 0) : 0;
@@ -803,7 +803,7 @@ exports.updateKanbanStatus = async (req, res) => {
     if (previousStatus !== leadStatus.toString()) {
       if (previousStatus) await decrementCount({ statusId: previousStatus });
       await incrementCount({ statusId: leadStatus });
-      
+
       const newStatusObj = await LeadStatus.findById(leadStatus);
       if (newStatusObj) {
 
@@ -1022,7 +1022,7 @@ exports.getLeadCountSummary = async (req, res) => {
               },
             },
           ].filter(Boolean),
-          
+
           totalRevenue: [
             { $match: revenueMatch },
             {
@@ -1433,7 +1433,7 @@ exports.getWonLeads = async (req, res) => {
     const projectDetails = await require("../model/projectDetail").find({ lead: { $in: leadIds } }).lean();
     const pdMap = {};
     projectDetails.forEach(pd => pdMap[pd.lead] = pd);
-    
+
     leads.forEach(l => {
       l.projectDetail = pdMap[l._id] || null;
       l.projectAmount = l.projectDetail ? (l.projectDetail.projectAmount || 0) : 0;
@@ -1754,7 +1754,7 @@ exports.exportLeadsToExcel = async (req, res) => {
 exports.deleteAttachment = async (req, res) => {
   try {
     const { leadId, attachmentId } = req.params;
-    
+
     const lead = await LEAD.findById(leadId);
     if (!lead) return res.status(404).json({ status: "Fail", message: "Lead not found" });
 
@@ -1817,17 +1817,17 @@ exports.downloadImportTemplate = async (req, res) => {
 
     // Column definitions – only core importable fields
     const COLUMNS = [
-      { header: "Full Name *",     key: "fullName",    width: 24 },
-      { header: "Contact *",       key: "contact",     width: 18 },
-      { header: "Email",           key: "email",       width: 28 },
-      { header: "KW Requirement",  key: "kwRequirement", width: 18 },
-      { header: "Discom Name",     key: "discomName",  width: 20 },
-      { header: "Lead Reference",  key: "leadrefrance", width: 20 },
-      { header: "Project Type",    key: "projecttype", width: 20 },
-      { header: "Address",         key: "address",     width: 28 },
-      { header: "Location Link",   key: "locationLink", width: 28 },
-      { header: "Lead Status *",   key: "leadStatus",  width: 20 },
-      { header: "Note",            key: "note",        width: 30 },
+      { header: "Full Name *", key: "fullName", width: 24 },
+      { header: "Contact *", key: "contact", width: 18 },
+      { header: "Email", key: "email", width: 28 },
+      { header: "KW Requirement", key: "kwRequirement", width: 18 },
+      { header: "Discom Name", key: "discomName", width: 20 },
+      { header: "Lead Reference", key: "leadrefrance", width: 20 },
+      { header: "Project Type", key: "projecttype", width: 20 },
+      { header: "Address", key: "address", width: 28 },
+      { header: "Location Link", key: "locationLink", width: 28 },
+      { header: "Lead Status *", key: "leadStatus", width: 20 },
+      { header: "Note", key: "note", width: 30 },
     ];
 
     sheet.columns = COLUMNS;
@@ -1835,8 +1835,8 @@ exports.downloadImportTemplate = async (req, res) => {
     // Style header row
     const headerRow = sheet.getRow(1);
     headerRow.eachCell((cell) => {
-      cell.fill   = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1E40AF" } };
-      cell.font   = { bold: true, color: { argb: "FFFFFFFF" }, size: 11 };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1E40AF" } };
+      cell.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 11 };
       cell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
       cell.border = { bottom: { style: "medium", color: { argb: "FF1E40AF" } } };
     });
@@ -1844,13 +1844,13 @@ exports.downloadImportTemplate = async (req, res) => {
 
     // Add a sample row
     const sampleRow = sheet.addRow({
-      fullName:    "John Doe",
-      contact:     "9876543210",
-      email:       "john@example.com",
+      fullName: "John Doe",
+      contact: "9876543210",
+      email: "john@example.com",
       companyName: "Acme Corp",
-      address:     "123 Main St",
-      leadStatus:  statuses[0]?.name || "",
-      note:        "Sample note",
+      address: "123 Main St",
+      leadStatus: statuses[0]?.name || "",
+      note: "Sample note",
     });
     sampleRow.eachCell((cell) => {
       cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEEF2FF" } };
@@ -1861,7 +1861,7 @@ exports.downloadImportTemplate = async (req, res) => {
     // ── Data validation (dropdowns) for rows 2-1001 ───────────────────────
     const COL = { leadStatus: 6 }; // 1-based col index
 
-    const statusFormula  = `__statuses!$A$1:$A$${statuses.length || 1}`;
+    const statusFormula = `__statuses!$A$1:$A$${statuses.length || 1}`;
 
     for (let row = 2; row <= 1001; row++) {
       sheet.getCell(row, COL.leadStatus).dataValidation = {
@@ -1918,14 +1918,14 @@ exports.bulkImportLeads = async (req, res) => {
     const VALID_PRIORITIES = ["high", "medium", "low"];
 
     const successRows = [];
-    const failedRows  = []; // { rowNum, rowData, errors }
+    const failedRows = []; // { rowNum, rowData, errors }
 
     sheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
       if (rowNumber === 1) return; // skip header
 
       const getCellValue = (col) => {
         const cell = row.getCell(col);
-        const val  = cell.value;
+        const val = cell.value;
         if (val === null || val === undefined) return "";
         if (typeof val === "object" && val.richText) {
           return val.richText.map((rt) => rt.text).join("").trim();
@@ -1933,28 +1933,28 @@ exports.bulkImportLeads = async (req, res) => {
         return String(val).trim();
       };
 
-      const fullName    = getCellValue(1);
-      const contact     = getCellValue(2);
-      const email       = getCellValue(3);
+      const fullName = getCellValue(1);
+      const contact = getCellValue(2);
+      const email = getCellValue(3);
       const kwRequirement = getCellValue(4);
-      const discomName  = getCellValue(5);
+      const discomName = getCellValue(5);
       const leadrefrance = getCellValue(6);
       const projecttype = getCellValue(7);
-      const address     = getCellValue(8);
+      const address = getCellValue(8);
       const locationLink = getCellValue(9);
-      const statusName  = getCellValue(10);
-      const note        = getCellValue(11);
+      const statusName = getCellValue(10);
+      const note = getCellValue(11);
 
       // Skip completely empty rows
       if (!fullName && !contact && !kwRequirement && !statusName && !discomName) return;
 
       const errors = [];
 
-      if (!fullName)    errors.push("Full Name is required");
-      if (!contact)     errors.push("Contact is required");
+      if (!fullName) errors.push("Full Name is required");
+      if (!contact) errors.push("Contact is required");
 
       const statusId = statusName ? statusMap[statusName.toLowerCase()] : null;
-      if (!statusName)  errors.push("Lead Status is required");
+      if (!statusName) errors.push("Lead Status is required");
       else if (!statusId) errors.push(`Lead Status '${statusName}' not found in master`);
 
       if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -2019,28 +2019,28 @@ exports.bulkImportLeads = async (req, res) => {
 
     // If there are failed rows, return them as Excel
     if (allFailed.length > 0) {
-      const failWb   = new ExcelJS.Workbook();
+      const failWb = new ExcelJS.Workbook();
       const failSheet = failWb.addWorksheet("Failed Leads");
 
       failSheet.columns = [
-        { header: "Row #",          key: "rowNumber",   width: 8  },
-        { header: "Full Name",      key: "fullName",    width: 22 },
-        { header: "Contact",        key: "contact",     width: 16 },
-        { header: "Email",          key: "email",       width: 26 },
-        { header: "KW Req",         key: "kwRequirement", width: 14 },
-        { header: "Discom Name",    key: "discomName",  width: 20 },
-        { header: "Address",        key: "address",     width: 26 },
-        { header: "Location Link",  key: "locationLink", width: 26 },
-        { header: "Lead Status",    key: "statusName",  width: 18 },
-        { header: "Note",           key: "note",        width: 28 },
-        { header: "Failure Reason", key: "errors",      width: 50 },
+        { header: "Row #", key: "rowNumber", width: 8 },
+        { header: "Full Name", key: "fullName", width: 22 },
+        { header: "Contact", key: "contact", width: 16 },
+        { header: "Email", key: "email", width: 26 },
+        { header: "KW Req", key: "kwRequirement", width: 14 },
+        { header: "Discom Name", key: "discomName", width: 20 },
+        { header: "Address", key: "address", width: 26 },
+        { header: "Location Link", key: "locationLink", width: 26 },
+        { header: "Lead Status", key: "statusName", width: 18 },
+        { header: "Note", key: "note", width: 28 },
+        { header: "Failure Reason", key: "errors", width: 50 },
       ];
 
       // Style header
       const hRow = failSheet.getRow(1);
       hRow.eachCell((cell) => {
-        cell.fill   = { type: "pattern", pattern: "solid", fgColor: { argb: "FFDC2626" } };
-        cell.font   = { bold: true, color: { argb: "FFFFFFFF" }, size: 11 };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFDC2626" } };
+        cell.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 11 };
         cell.alignment = { vertical: "middle", horizontal: "center" };
       });
       hRow.height = 28;
@@ -2048,16 +2048,16 @@ exports.bulkImportLeads = async (req, res) => {
       allFailed.forEach((f) => {
         const r = failSheet.addRow({
           rowNumber: f.rowNumber,
-          fullName:  f.fullName,
-          contact:   f.contact,
-          email:     f.email,
+          fullName: f.fullName,
+          contact: f.contact,
+          email: f.email,
           kwRequirement: f.kwRequirement,
           discomName: f.discomName,
-          address:   f.address,
+          address: f.address,
           locationLink: f.locationLink,
           statusName: f.statusName,
-          note:      f.note,
-          errors:    f.errors,
+          note: f.note,
+          errors: f.errors,
         });
         r.eachCell((cell) => {
           cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF1F2" } };
@@ -2074,7 +2074,7 @@ exports.bulkImportLeads = async (req, res) => {
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
       res.setHeader("Content-Disposition", `attachment; filename="failed_leads_${Date.now()}.xlsx"`);
       res.setHeader("X-Import-Imported", String(imported));
-      res.setHeader("X-Import-Failed",   String(allFailed.length));
+      res.setHeader("X-Import-Failed", String(allFailed.length));
       await failWb.xlsx.write(res);
       return res.end();
     }
@@ -2087,7 +2087,7 @@ exports.bulkImportLeads = async (req, res) => {
     });
   } catch (error) {
     if (filePath && fs.existsSync(filePath)) {
-      try { fs.unlinkSync(filePath); } catch (_) {}
+      try { fs.unlinkSync(filePath); } catch (_) { }
     }
     return res.status(500).json({ status: "Fail", message: error.message });
   }
