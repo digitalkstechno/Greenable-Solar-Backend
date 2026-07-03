@@ -822,6 +822,12 @@ exports.getLeadCountSummary = async (req, res) => {
       baseMatch.createdAt = { $gte: start, $lte: end };
     }
 
+    const wonStatus = allStatuses.find(s => s.name.toLowerCase() === 'won');
+    const revenueMatch = { ...baseMatch };
+    if (wonStatus) {
+      revenueMatch.leadStatus = wonStatus._id;
+    }
+
     const counts = await LEAD.aggregate([
       {
         $facet: {
@@ -854,14 +860,14 @@ exports.getLeadCountSummary = async (req, res) => {
           ].filter(Boolean),
           
           totalRevenue: [
-            Object.keys(baseMatch).length > 0 ? { $match: baseMatch } : null,
+            { $match: revenueMatch },
             {
               $group: {
                 _id: null,
                 total: { $sum: "$paymentAmount" },
               },
             },
-          ].filter(Boolean),
+          ],
         },
       },
     ]);
