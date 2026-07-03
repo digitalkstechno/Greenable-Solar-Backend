@@ -192,12 +192,7 @@ exports.fetchAllLeads = async (req, res) => {
     }
 
     if (req.leadScope === "own" && req.user && req.user._id) {
-      andConditions.push({
-        $or: [
-          { assignedTo: req.user._id },
-          { createdBy: req.user._id }
-        ]
-      });
+      andConditions.push({ createdBy: req.user._id });
     }
 
     if (andConditions.length > 0) {
@@ -299,21 +294,6 @@ exports.fetchLeadById = async (req, res) => {
     if (!leadData) {
       throw new Error("Lead not found");
     }
-
-    if (
-      req.leadScope === "own" &&
-      req.user &&
-      (
-        (!leadData.assignedTo || !leadData.assignedTo._id || String(leadData.assignedTo._id) !== String(req.user._id)) &&
-        (!leadData.createdBy || String(leadData.createdBy) !== String(req.user._id))
-      )
-    ) {
-      return res.status(403).json({
-        status: "Fail",
-        message: "Access denied",
-      });
-    }
-
     return res.status(200).json({
       status: "Success",
       message: "Lead fetched successfully",
@@ -561,12 +541,7 @@ exports.fetchLeadsForKanban = async (req, res) => {
     const andConditions = [];
     const myOnly = req.query.my === 'true';
     if ((req.leadScope === "own" || myOnly) && req.user && req.user._id) {
-      andConditions.push({
-        $or: [
-          { assignedTo: req.user._id },
-          { createdBy: req.user._id }
-        ]
-      });
+      andConditions.push({ createdBy: req.user._id });
     }
 
     // 🔥 SEARCH FILTER
@@ -666,12 +641,7 @@ exports.fetchKanbanLeadsByStatus = async (req, res) => {
     const andConditions = [];
 
     if ((req.leadScope === "own" || myOnly) && req.user && req.user._id) {
-      andConditions.push({
-        $or: [
-          { assignedTo: req.user._id },
-          { createdBy: req.user._id }
-        ]
-      });
+      andConditions.push({ createdBy: req.user._id });
     }
 
     if (search) {
@@ -849,7 +819,7 @@ exports.getKanbanCounts = async (req, res) => {
     const match = {};
     const myOnly = req.query.my === 'true';
     if ((req.leadScope === "own" || myOnly) && req.user && req.user._id) {
-      match.assignedTo = req.user._id;
+      match.createdBy = req.user._id;
     }
 
     // 🔥 SEARCH FILTER
@@ -934,12 +904,7 @@ exports.getLeadCountSummary = async (req, res) => {
     const myOnly = req.query.my === 'true';
     const andConditions = [];
     if ((req.leadScope === "own" || myOnly) && req.user && req.user._id) {
-      andConditions.push({
-        $or: [
-          { assignedTo: req.user._id },
-          { createdBy: req.user._id }
-        ]
-      });
+      andConditions.push({ createdBy: req.user._id });
     }
 
     if (search) {
@@ -1355,7 +1320,7 @@ exports.getWonLeads = async (req, res) => {
     };
 
     if (req.leadScope === "own" && req.user && req.user._id) {
-      query.assignedTo = req.user;
+      query.createdBy = req.user._id;
     }
 
     // 🔥 SEARCH FILTER
@@ -1492,7 +1457,7 @@ exports.getLostLeads = async (req, res) => {
     };
 
     if (req.leadScope === "own" && req.user && req.user._id) {
-      query.assignedTo = req.user._id;
+      query.createdBy = req.user._id;
     }
 
     // 🔥 SEARCH FILTER
@@ -1636,7 +1601,7 @@ exports.exportLeadsToExcel = async (req, res) => {
 
     // OWN SCOPE
     if (req.leadScope === "own" && req.user && req.user._id) {
-      query.assignedTo = req.user._id;
+      query.createdBy = req.user._id;
     }
 
     const leads = await LEAD.find(query)

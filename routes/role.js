@@ -10,25 +10,19 @@ let {
 let authMiddleware = require("../middleware/auth");
 const { authorize } = require("../middleware/permissions");
 
-router.post("/", authMiddleware, 
-  // authorize("setup", "create"), 
-  createRole);
-router.get("/", authMiddleware, 
-  // authorize("setup", "readAll"), 
-  fetchAllRoles);
+router.post("/", authMiddleware, authorize("role", "create"), createRole);
+router.get("/", authMiddleware, fetchAllRoles);
 router.get(
   "/:id",
   authMiddleware,
-  // authorize("setup", "readAll"),
+  authorize("role", "readAll"),
   fetchRoleById,
 );
-router.put("/:id", authMiddleware, 
-  // authorize("setup", "update"), 
-  roleUpdate);
+router.put("/:id", authMiddleware, authorize("role", "update"), roleUpdate);
 router.delete(
   "/:id",
   authMiddleware,
-  // authorize("setup", "delete"),
+  authorize("role", "delete"),
   roleDelete,
 );
 
