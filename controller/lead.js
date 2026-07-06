@@ -192,7 +192,7 @@ exports.fetchAllLeads = async (req, res) => {
     }
 
     if (req.leadScope === "own" && req.user && req.user._id) {
-      andConditions.push({ createdBy: req.user._id });
+      andConditions.push({ $or: [{ createdBy: req.user._id }, { assignedTo: req.user._id }] });
     }
 
     if (andConditions.length > 0) {
@@ -541,7 +541,7 @@ exports.fetchLeadsForKanban = async (req, res) => {
     const andConditions = [];
     const myOnly = req.query.my === 'true';
     if ((req.leadScope === "own" || myOnly) && req.user && req.user._id) {
-      andConditions.push({ createdBy: req.user._id });
+      andConditions.push({ $or: [{ createdBy: req.user._id }, { assignedTo: req.user._id }] });
     }
 
     // 🔥 SEARCH FILTER
@@ -641,7 +641,7 @@ exports.fetchKanbanLeadsByStatus = async (req, res) => {
     const andConditions = [];
 
     if ((req.leadScope === "own" || myOnly) && req.user && req.user._id) {
-      andConditions.push({ createdBy: req.user._id });
+      andConditions.push({ $or: [{ createdBy: req.user._id }, { assignedTo: req.user._id }] });
     }
 
     if (search) {
@@ -819,7 +819,7 @@ exports.getKanbanCounts = async (req, res) => {
     const match = {};
     const myOnly = req.query.my === 'true';
     if ((req.leadScope === "own" || myOnly) && req.user && req.user._id) {
-      match.createdBy = req.user._id;
+      match.$or = [{ createdBy: req.user._id }, { assignedTo: req.user._id }];
     }
 
     // 🔥 SEARCH FILTER
@@ -904,7 +904,7 @@ exports.getLeadCountSummary = async (req, res) => {
     const myOnly = req.query.my === 'true';
     const andConditions = [];
     if ((req.leadScope === "own" || myOnly) && req.user && req.user._id) {
-      andConditions.push({ createdBy: req.user._id });
+      andConditions.push({ $or: [{ createdBy: req.user._id }, { assignedTo: req.user._id }] });
     }
 
     if (search) {
@@ -1058,7 +1058,7 @@ exports.getUpcomingFollowups = async (req, res) => {
     };
 
     if (req.leadScope === "own" && req.user && req.user._id) {
-      matchStage.assignedTo = req.user._id;
+      matchStage.$or = [{ createdBy: req.user._id }, { assignedTo: req.user._id }];
     }
 
     const basePipeline = [
@@ -1177,7 +1177,7 @@ exports.getDueFollowups = async (req, res) => {
     };
 
     if (req.leadScope === "own" && req.user && req.user._id) {
-      matchStage.assignedTo = req.user._id;
+      matchStage.$or = [{ createdBy: req.user._id }, { assignedTo: req.user._id }];
     }
 
     const basePipeline = [
@@ -1314,7 +1314,7 @@ exports.getWonLeads = async (req, res) => {
     };
 
     if (req.leadScope === "own" && req.user && req.user._id) {
-      query.createdBy = req.user._id;
+      query.$or = [{ createdBy: req.user._id }, { assignedTo: req.user._id }];
     }
 
     // 🔥 SEARCH FILTER
@@ -1451,7 +1451,7 @@ exports.getLostLeads = async (req, res) => {
     };
 
     if (req.leadScope === "own" && req.user && req.user._id) {
-      query.createdBy = req.user._id;
+      query.$or = [{ createdBy: req.user._id }, { assignedTo: req.user._id }];
     }
 
     // 🔥 SEARCH FILTER
@@ -1595,7 +1595,7 @@ exports.exportLeadsToExcel = async (req, res) => {
 
     // OWN SCOPE
     if (req.leadScope === "own" && req.user && req.user._id) {
-      query.createdBy = req.user._id;
+      query.$or = [{ createdBy: req.user._id }, { assignedTo: req.user._id }];
     }
 
     const leads = await LEAD.find(query)
