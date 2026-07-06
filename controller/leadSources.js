@@ -9,6 +9,12 @@ exports.createLeadSources = async (req, res) => {
       data: newLeadSource,
     });
   } catch (error) {
+    if (error.code === 11000) {
+      return res.status(400).json({
+        status: "Fail",
+        message: "This order is already in use. Please enter a unique order.",
+      });
+    }
     res.status(404).json({
       status: "Fail",
       message: error.message,
@@ -105,6 +111,12 @@ exports.LeadSourceUpdate = async (req, res) => {
       data: updatedSources,
     });
   } catch (error) {
+    if (error.code === 11000) {
+      return res.status(400).json({
+        status: "Fail",
+        message: "This order is already in use. Please enter a unique order.",
+      });
+    }
     return res.status(404).json({
       status: "Fail",
       message: error.message,

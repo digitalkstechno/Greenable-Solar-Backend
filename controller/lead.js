@@ -47,8 +47,13 @@ exports.createLead = async (req, res) => {
     else delete leadData.leadStatus;
 
     const sanitizedAssignedTo = sanitizeObjectId(leadData.assignedTo);
-    if (sanitizedAssignedTo !== undefined) leadData.assignedTo = sanitizedAssignedTo;
-    else delete leadData.assignedTo;
+    if (sanitizedAssignedTo !== undefined) {
+      leadData.assignedTo = sanitizedAssignedTo;
+    } else if (req.user && req.user._id) {
+      leadData.assignedTo = req.user._id;
+    } else {
+      delete leadData.assignedTo;
+    }
 
 
     if (req.files && req.files.length > 0) {
