@@ -128,7 +128,7 @@ exports.fetchAllLeads = async (req, res) => {
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
 
-    const { search = "", status, staff, date, from, to } = req.query;
+    const { search = "", status, staff, date, from, to, source } = req.query;
 
     // 🔥 BASE QUERY
     const query = {};
@@ -166,6 +166,26 @@ exports.fetchAllLeads = async (req, res) => {
     /* =====================
        STAFF FILTER
     ====================== */
+    if (source) {
+      const sourceArr = source.split(',').map(s => s.trim()).filter(Boolean);
+      const LeadSource = require("../model/leadSources");
+      
+      const objectIds = sourceArr.filter(id => id.match(/^[0-9a-fA-F]{24}$/));
+      const otherNames = sourceArr.filter(id => !id.match(/^[0-9a-fA-F]{24}$/));
+
+      let namesToSearch = [...otherNames];
+      if (objectIds.length > 0) {
+         const sources = await LeadSource.find({ _id: { $in: objectIds } });
+         namesToSearch.push(...sources.map(s => s.name));
+      }
+
+      if (namesToSearch.length === 1) {
+        query.leadrefrance = { $regex: new RegExp(namesToSearch[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') };
+      } else if (namesToSearch.length > 1) {
+        query.leadrefrance = { $in: namesToSearch.map(s => new RegExp(s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')) };
+      }
+    }
+
     if (staff) {
       const staffArr = staff.split(',').map(s => s.trim()).filter(Boolean);
       if (staffArr.length === 1) {
@@ -540,7 +560,7 @@ exports.leadDelete = async (req, res) => {
 
 exports.fetchLeadsForKanban = async (req, res) => {
   try {
-    const { search, status, staff, date } = req.query;
+    const { search, status, staff, date, source } = req.query;
 
     const match = {};
     const andConditions = [];
@@ -586,6 +606,20 @@ exports.fetchLeadsForKanban = async (req, res) => {
       } else if (staffArr.length > 1) {
         match.assignedTo = { $in: staffArr };
       }
+    }
+
+    if (source) {
+      const sourceArr = source.split(',').map(s => s.trim()).filter(Boolean);
+      const LeadSource = require("../model/leadSources");
+      const objectIds = sourceArr.filter(id => id.match(/^[0-9a-fA-F]{24}$/));
+      const otherNames = sourceArr.filter(id => !id.match(/^[0-9a-fA-F]{24}$/));
+      let namesToSearch = [...otherNames];
+      if (objectIds.length > 0) {
+         const sources = await LeadSource.find({ _id: { $in: objectIds } });
+         namesToSearch.push(...sources.map(s => s.name));
+      }
+      if (namesToSearch.length === 1) match.leadrefrance = { $regex: new RegExp(namesToSearch[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') };
+      else if (namesToSearch.length > 1) match.leadrefrance = { $in: namesToSearch.map(s => new RegExp(s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')) };
     }
 
     // 🔥 DATE FILTER
@@ -640,7 +674,7 @@ exports.fetchLeadsForKanban = async (req, res) => {
 
 exports.fetchKanbanLeadsByStatus = async (req, res) => {
   try {
-    const { statusId, search, staff, date, page = 1, limit = 10 } = req.query;
+    const { statusId, search, staff, date, source, page = 1, limit = 10 } = req.query;
     const match = { leadStatus: statusId };
     const myOnly = req.query.my === 'true';
     const andConditions = [];
@@ -670,6 +704,20 @@ exports.fetchKanbanLeadsByStatus = async (req, res) => {
       const staffArr = staff.split(',').filter(s => s.trim());
       if (staffArr.length === 1) match.assignedTo = staffArr[0];
       else if (staffArr.length > 1) match.assignedTo = { $in: staffArr };
+    }
+
+    if (source) {
+      const sourceArr = source.split(',').map(s => s.trim()).filter(Boolean);
+      const LeadSource = require("../model/leadSources");
+      const objectIds = sourceArr.filter(id => id.match(/^[0-9a-fA-F]{24}$/));
+      const otherNames = sourceArr.filter(id => !id.match(/^[0-9a-fA-F]{24}$/));
+      let namesToSearch = [...otherNames];
+      if (objectIds.length > 0) {
+         const sources = await LeadSource.find({ _id: { $in: objectIds } });
+         namesToSearch.push(...sources.map(s => s.name));
+      }
+      if (namesToSearch.length === 1) match.leadrefrance = { $regex: new RegExp(namesToSearch[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') };
+      else if (namesToSearch.length > 1) match.leadrefrance = { $in: namesToSearch.map(s => new RegExp(s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')) };
     }
 
     if (date) {
@@ -819,7 +867,7 @@ exports.updateKanbanStatus = async (req, res) => {
 
 exports.getKanbanCounts = async (req, res) => {
   try {
-    const { search, status, staff, date } = req.query;
+    const { search, status, staff, date, source } = req.query;
 
     const match = {};
     const myOnly = req.query.my === 'true';
@@ -857,6 +905,20 @@ exports.getKanbanCounts = async (req, res) => {
       const end = new Date(date);
       end.setHours(23, 59, 59, 999);
       match.createdAt = { $gte: start, $lte: end };
+    }
+
+    if (source) {
+      const sourceArr = source.split(',').map(s => s.trim()).filter(Boolean);
+      const LeadSource = require("../model/leadSources");
+      const objectIds = sourceArr.filter(id => id.match(/^[0-9a-fA-F]{24}$/));
+      const otherNames = sourceArr.filter(id => !id.match(/^[0-9a-fA-F]{24}$/));
+      let namesToSearch = [...otherNames];
+      if (objectIds.length > 0) {
+         const sources = await LeadSource.find({ _id: { $in: objectIds } });
+         namesToSearch.push(...sources.map(s => s.name));
+      }
+      if (namesToSearch.length === 1) match.leadrefrance = new RegExp(`^${namesToSearch[0]}$`, 'i');
+      else if (namesToSearch.length > 1) match.leadrefrance = { $in: namesToSearch.map(s => new RegExp(`^${s}$`, 'i')) };
     }
 
     const pipeline = [];
