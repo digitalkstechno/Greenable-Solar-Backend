@@ -26,7 +26,7 @@ exports.upsertProjectDetail = async (req, res) => {
 
     // Parse body (text fields)
     const {
-      leadRefrance, panelMake, panelWp, noOfPanel,
+      creatorName, panelMake, panelWp, noOfPanel,
       inverterMake, inverterKw, inverterPhase, installationRoof,
       discom, consumerConnectionType, elcbInstalled, elcbProvideBy,
       wiringType, homeFloor, walkway, walkwayLengthFeet,
@@ -45,7 +45,7 @@ exports.upsertProjectDetail = async (req, res) => {
 
     const update = {
       lead: leadId,
-      leadRefrance, panelMake,
+      creatorName, panelMake,
       panelWp: panelWp ? Number(panelWp) : undefined,
       noOfPanel: noOfPanel ? Number(noOfPanel) : undefined,
       inverterMake,
@@ -118,12 +118,79 @@ exports.upsertProjectDetail = async (req, res) => {
 exports.getProjectDetail = async (req, res) => {
   try {
     const { leadId } = req.params;
+    const { qIdx, optIdx = '0' } = req.query;
+
     const detail = await ProjectDetail.findOne({ lead: leadId }).populate(
       "lead",
-      "fullName contact email"
+      "fullName contact email quotations"
     );
 
-    return res.status(200).json({ status: "Success", data: detail || null });
+    if (detail) {
+      return res.status(200).json({ status: "Success", data: detail });
+    }
+
+    // If no project detail found, try to auto-extract from the latest or selected quotation
+    const lead = await Lead.findById(leadId).populate('createdBy assignedTo');
+    if (!lead || !lead.quotations || lead.quotations.length === 0) {
+      return res.status(200).json({ status: "Success", data: null });
+    }
+
+    const quotationIndex = qIdx !== undefined ? parseInt(qIdx, 10) : lead.quotations.length - 1;
+    const selectedQ = lead.quotations[quotationIndex];
+    if (!selectedQ) {
+      return res.status(200).json({ status: "Success", data: null });
+    }
+
+    const optionIndex = parseInt(optIdx, 10);
+
+    const getValByKeywords = (keywords) => {
+      const row = (selectedQ.rows || []).find((r) => {
+        const title = (r.title || '').toUpperCase();
+        return keywords.some(kw => title.includes(kw));
+      });
+      return row?.values?.[optionIndex] || '';
+    };
+
+    const panelMake = getValByKeywords(['SOLAR MODULE MAKE', 'PANEL MAKE', 'MODULE MAKE', 'PANEL BRAND', 'MODULE BRAND', 'MODULE COMPANY']);
+    const panelWp = getValByKeywords(['SYSTEM CAPACITY', 'PANEL WP', 'WATTAGE', 'PANEL CAPACITY']);
+    const noOfPanel = getValByKeywords(['NO OF PANEL', 'NO. OF PANELS', 'PANEL COUNT', 'PANEL QTY', 'PANEL QUANTITY']);
+    const inverterMake = getValByKeywords(['INVERTER MAKE', 'INVERTER BRAND', 'INVERTER COMPANY', 'INVERTER']);
+    const inverterKw = getValByKeywords(['INVERTER KW', 'INVERTER CAPACITY', 'INVERTER SIZE', 'KW']);
+    const discom = getValByKeywords(['DISCOM', 'DISCOM NAME']);
+    const roof = getValByKeywords(['ROOF', 'ROOF TYPE', 'INSTALLATION ROOF']);
+    const connType = getValByKeywords(['CONNECTION', 'CONNECTION TYPE']);
+    const wiringType = getValByKeywords(['WIRING', 'WIRING TYPE']);
+    const homeFloor = getValByKeywords(['FLOOR', 'HOME FLOOR']);
+    const hdgiPipeMake = getValByKeywords(['PIPE MAKE', 'PIPE BRAND', 'HDGI PIPE', 'HDGI']);
+    const projectAmount = getValByKeywords(['CUSTOMER PAYABLE AMOUNT', 'PROJECT AMOUNT', 'TOTAL PRICE', 'PAYABLE AMOUNT', 'AMOUNT']);
+
+    const finalPanelMake = panelMake || selectedQ.solarModule || '';
+    const finalInverterMake = inverterMake || selectedQ.inverter || '';
+
+    const autoFillData = {
+      lead: {
+        _id: lead._id,
+        fullName: lead.fullName,
+        contact: lead.contact,
+        email: lead.email,
+        quotations: lead.quotations
+      },
+      creatorName: lead.createdBy?.fullName || lead.assignedTo?.fullName || undefined,
+      panelMake: finalPanelMake,
+      panelWp: panelWp ? Number(panelWp) : undefined,
+      noOfPanel: noOfPanel ? Number(noOfPanel) : undefined,
+      inverterMake: finalInverterMake,
+      inverterKw: inverterKw ? Number(inverterKw) : undefined,
+      discom: discom ? discom.toLowerCase() : undefined,
+      installationRoof: roof ? roof.toLowerCase() : undefined,
+      consumerConnectionType: connType ? connType.toLowerCase() : undefined,
+      wiringType: wiringType ? wiringType.toLowerCase() : undefined,
+      homeFloor,
+      hdgiPipeMake,
+      projectAmount: projectAmount ? Number(projectAmount) : undefined,
+    };
+
+    return res.status(200).json({ status: "Success", data: autoFillData });
   } catch (error) {
     console.error("getProjectDetail error:", error);
     return res.status(500).json({ status: "Error", message: error.message });

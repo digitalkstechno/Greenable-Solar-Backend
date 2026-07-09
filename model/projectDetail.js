@@ -21,7 +21,7 @@ const ProjectDetailSchema = new Schema(
     },
 
     // ── Project Details ──────────────────────────────────────────────────────
-    leadRefrance: { type: String },
+    creatorName: { type: String },
     panelMake: { type: String },
     panelWp: { type: Number },
     noOfPanel: { type: Number },
