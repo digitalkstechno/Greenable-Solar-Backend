@@ -1125,10 +1125,16 @@ exports.getUpcomingFollowups = async (req, res) => {
 
     const now = new Date();
 
+     const wonStatus = await LeadStatus.findOne({ name: "Won" });
+
     const matchStage = {
       isActive: { $ne: false },
       nextFollowupDate: { $ne: null, $exists: true },
     };
+
+    if (wonStatus) {
+      matchStage.leadStatus = { $ne: wonStatus._id };
+    }
 
     if (req.leadScope === "own" && req.user && req.user._id) {
       matchStage.$or = [{ createdBy: req.user._id }, { assignedTo: req.user._id }];

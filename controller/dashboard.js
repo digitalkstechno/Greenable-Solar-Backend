@@ -9,171 +9,6 @@ dayjs.tz.setDefault("Asia/Kolkata");
 const User = require("../model/user");
 const Staff = require("../model/staff");
 
-
-// exports.getDashboard = async (req, res) => {
-//     try {
-//         const { range, from, to } = req.query;
-//         const now = dayjs();
-
-//         let startDate = null;
-//         let endDate = null;
-
-//         if (range === "today") {
-//             startDate = now.startOf("day").toDate();
-//             endDate = now.endOf("day").toDate();
-//         } else if (range === "thisMonth") {
-//             startDate = now.startOf("month").toDate();
-//             endDate = now.endOf("month").toDate();
-//         } else if (range === "previousMonth") {
-//             const prevMonth = now.subtract(1, "month");
-//             startDate = prevMonth.startOf("month").toDate();
-//             endDate = prevMonth.endOf("month").toDate();
-//         } else if (range === "thisYear") {
-//             startDate = now.startOf("year").toDate();
-//             endDate = now.endOf("year").toDate();
-//         } else if (range === "custom" && from && to) {
-//             startDate = dayjs(from).startOf("day").toDate();
-//             endDate = dayjs(to).endOf("day").toDate();
-//         }
-
-//         // ---------- Role detection ----------
-//         const roleName = (req.user?.role?.roleName || "").toUpperCase();
-//         const userId = req.user._id;
-
-//         let userScope = "admin"; // default: full access
-//         if (roleName.includes("SALES")) {
-//             userScope = "sales";
-//         } else if (roleName.includes("CALLING")) {
-//             userScope = "calling";
-//         } else if (roleName.includes("SUPER ADMIN") || roleName.includes("ADMIN")) {
-//             userScope = "admin";
-//         }
-
-//         // ---------- Base filter ----------
-//         const filter = { isActive: true };
-//         if (startDate && endDate) {
-//             filter.createdAt = { $gte: startDate, $lte: endDate };
-//         }
-
-//         // Sales & Calling: potani j assigned/created leads
-//         if (userScope === "sales" || userScope === "calling") {
-//             filter.$or = [{ assignedTo: userId }, { createdBy: userId }];
-//         }
-
-//         // ---------- Fetch data ----------
-//         const leads = await Lead.find(filter)
-//             .populate("leadStatus", "name")
-//             .populate("assignedTo", "fullName");
-
-//         const allStatuses = await LeadStatus.find({}, "name"); // badha defined statuses
-
-//         let totalLeads = leads.length;
-//         let totalNewLeads = 0;
-//         let totalWonLeads = 0;
-//         let totalLostLeads = 0;
-//         let followUps = 0;
-//         let totalRevenue = 0;
-
-//         const statusCountMap = {};
-//         const sourceCountMap = {};
-//         const assignmentMap = {}; // salesName -> { newLead, won, lost }
-
-//         // Pehla badha defined statuses ne 0 count sathe initialize karo
-//         allStatuses.forEach((s) => {
-//             statusCountMap[s.name] = 0;
-//         });
-
-//         leads.forEach((lead) => {
-//             const statusName = lead.leadStatus?.name || "Unknown";
-//             const source = lead.leadrefrance || "Unknown";
-//             const salesName = lead.assignedTo?.fullName || "Unassigned";
-
-//             // Lead Status count
-//             statusCountMap[statusName] = (statusCountMap[statusName] || 0) + 1;
-
-//             // Lead Source count
-//             sourceCountMap[source] = (sourceCountMap[source] || 0) + 1;
-
-//             // Sales Executive / Assignment breakdown
-//             if (!assignmentMap[salesName]) {
-//                 assignmentMap[salesName] = { newLead: 0, won: 0, lost: 0 };
-//             }
-
-//             const status = statusName.toLowerCase();
-//             if (status === "new lead") {
-//                 totalNewLeads++;
-//                 assignmentMap[salesName].newLead++;
-//             } else if (status === "won") {
-//                 totalWonLeads++;
-//                 assignmentMap[salesName].won++;
-//             } else if (status === "lost") {
-//                 totalLostLeads++;
-//                 assignmentMap[salesName].lost++;
-//             }
-
-//             // Follow-ups: pending next follow-up hoy tya count (ASSUMPTION - confirm karo)
-//             if (lead.nextFollowupDate) {
-//                 followUps++;
-//             }
-
-//             if (lead.payments && lead.payments.length > 0) {
-//                 lead.payments.forEach((p) => {
-//                     totalRevenue += p.amount || 0;
-//                 });
-//             }
-//         });
-
-//         const leadStatus = Object.entries(statusCountMap).map(([status, count]) => ({
-//             status,
-//             count,
-//         }));
-
-//         const leadSource = Object.entries(sourceCountMap).map(([source, count]) => ({
-//             source,
-//             count,
-//         }));
-
-//         const salesExecutive = Object.entries(assignmentMap).map(([salesName, data]) => ({
-//             salesName,
-//             ...data,
-//         }));
-
-//         // ---------- Role-based response sections ----------
-//         const counts = {
-//             totalLeads,
-//             totalNewLeads,
-//             totalWonLeads,
-//             totalLostLeads,
-//             followUps,
-//             totalRevenue,
-//         };
-
-//         const charts = {};
-
-//         if (userScope === "admin") {
-//             charts.salesExecutive = salesExecutive;
-//             charts.leadStatus = leadStatus;
-//         } else if (userScope === "sales") {
-//             charts.leadStatus = leadStatus;
-//         } else if (userScope === "calling") {
-//             charts.leadSource = leadSource;
-//             charts.leadAssignment = salesExecutive;
-//             charts.leadStatus = leadStatus;
-//         }
-
-//         res.status(200).json({
-//             status: "Success",
-//             data: {
-//                 counts,
-//                 charts,
-//             },
-//         });
-//     } catch (error) {
-//         console.error("Dashboard API Error:", error);
-//         res.status(500).json({ message: "Something went wrong", error: error.message });
-//     }
-// };
-
 exports.getDashboard = async (req, res) => {
     try {
         const { range, from, to } = req.query;
@@ -311,8 +146,8 @@ exports.getDashboard = async (req, res) => {
         // });
 
         leads.forEach((lead) => {
-            console.log("**************", leads.find(l => l.leadStatus.name))
-            console.log("lead", leads.length)
+            // console.log("**************", leads.find(l => l.leadStatus.name))
+            // console.log("lead", leads.length)
 
             const statusName = lead.leadStatus?.name || "Unknown";
             const source = lead.leadrefrance || "Unknown";
@@ -322,7 +157,7 @@ exports.getDashboard = async (req, res) => {
             sourceCountMap[source] = (sourceCountMap[source] || 0) + 1;
 
             const status = statusName.toLowerCase().trim();
-            console.log("status******", status)
+            // console.log("status******", status)
             if (assignedId && assignmentMap[assignedId]) {
                 assignmentMap[assignedId].total++;
                 if (status === "new lead") assignmentMap[assignedId].newLead++;
@@ -334,7 +169,13 @@ exports.getDashboard = async (req, res) => {
             else if (status === "won") totalWonLeads++;
             else if (status === "lost") totalLostLeads++;
 
-            if (lead.nextFollowupDate) followUps++;
+            if (
+                lead.nextFollowupDate &&
+                status !== "won" &&  // "Upcoming Follow-ups" list Won leads exclude 
+                dayjs(lead.nextFollowupDate).tz("Asia/Kolkata").isAfter(dayjs().tz("Asia/Kolkata"))
+            ) {
+                followUps++;
+            }
             if (lead.payments?.length) lead.payments.forEach((p) => (totalRevenue += p.amount || 0));
         });
 
@@ -361,7 +202,7 @@ exports.getDashboard = async (req, res) => {
 
 
         // Total leads for salesExecutive section = sum of all sales exec leads
-        const salesExecutiveTotalLeads = salesExecutive.reduce((sum, s) => sum + (s.total || 0), 0);
+        // const salesExecutiveTotalLeads = salesExecutive.reduce((sum, s) => sum + (s.total || 0), 0);
 
         const counts = {
             totalLeads,
@@ -378,14 +219,14 @@ exports.getDashboard = async (req, res) => {
 
         if (userScope === "admin") {
             charts.salesExecutive = salesExecutive;
-            charts.salesExecutiveTotalLeads = salesExecutiveTotalLeads;
+            // charts.salesExecutiveTotalLeads = salesExecutiveTotalLeads;
             charts.leadStatus = leadStatus;
         } else if (userScope === "sales") {
             charts.leadStatus = leadStatus;
         } else if (userScope === "calling") {
             charts.leadSource = leadSource;
             charts.leadAssignment = salesExecutive;
-            charts.leadAssignmentTotalLeads = salesExecutiveTotalLeads;
+            // charts.leadAssignmentTotalLeads = salesExecutiveTotalLeads;
             charts.leadStatus = leadStatus;
         }
 
