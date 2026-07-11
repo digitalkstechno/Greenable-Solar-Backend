@@ -169,14 +169,14 @@ exports.fetchAllLeads = async (req, res) => {
     if (source) {
       const sourceArr = source.split(',').map(s => s.trim()).filter(Boolean);
       const LeadSource = require("../model/leadSources");
-      
+
       const objectIds = sourceArr.filter(id => id.match(/^[0-9a-fA-F]{24}$/));
       const otherNames = sourceArr.filter(id => !id.match(/^[0-9a-fA-F]{24}$/));
 
       let namesToSearch = [...otherNames];
       if (objectIds.length > 0) {
-         const sources = await LeadSource.find({ _id: { $in: objectIds } });
-         namesToSearch.push(...sources.map(s => s.name));
+        const sources = await LeadSource.find({ _id: { $in: objectIds } });
+        namesToSearch.push(...sources.map(s => s.name));
       }
 
       if (namesToSearch.length === 1) {
@@ -615,8 +615,8 @@ exports.fetchLeadsForKanban = async (req, res) => {
       const otherNames = sourceArr.filter(id => !id.match(/^[0-9a-fA-F]{24}$/));
       let namesToSearch = [...otherNames];
       if (objectIds.length > 0) {
-         const sources = await LeadSource.find({ _id: { $in: objectIds } });
-         namesToSearch.push(...sources.map(s => s.name));
+        const sources = await LeadSource.find({ _id: { $in: objectIds } });
+        namesToSearch.push(...sources.map(s => s.name));
       }
       if (namesToSearch.length === 1) match.leadrefrance = { $regex: new RegExp(namesToSearch[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') };
       else if (namesToSearch.length > 1) match.leadrefrance = { $in: namesToSearch.map(s => new RegExp(s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')) };
@@ -713,8 +713,8 @@ exports.fetchKanbanLeadsByStatus = async (req, res) => {
       const otherNames = sourceArr.filter(id => !id.match(/^[0-9a-fA-F]{24}$/));
       let namesToSearch = [...otherNames];
       if (objectIds.length > 0) {
-         const sources = await LeadSource.find({ _id: { $in: objectIds } });
-         namesToSearch.push(...sources.map(s => s.name));
+        const sources = await LeadSource.find({ _id: { $in: objectIds } });
+        namesToSearch.push(...sources.map(s => s.name));
       }
       if (namesToSearch.length === 1) match.leadrefrance = { $regex: new RegExp(namesToSearch[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') };
       else if (namesToSearch.length > 1) match.leadrefrance = { $in: namesToSearch.map(s => new RegExp(s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')) };
@@ -914,8 +914,8 @@ exports.getKanbanCounts = async (req, res) => {
       const otherNames = sourceArr.filter(id => !id.match(/^[0-9a-fA-F]{24}$/));
       let namesToSearch = [...otherNames];
       if (objectIds.length > 0) {
-         const sources = await LeadSource.find({ _id: { $in: objectIds } });
-         namesToSearch.push(...sources.map(s => s.name));
+        const sources = await LeadSource.find({ _id: { $in: objectIds } });
+        namesToSearch.push(...sources.map(s => s.name));
       }
       if (namesToSearch.length === 1) match.leadrefrance = new RegExp(`^${namesToSearch[0]}$`, 'i');
       else if (namesToSearch.length > 1) match.leadrefrance = { $in: namesToSearch.map(s => new RegExp(`^${s}$`, 'i')) };
@@ -1125,7 +1125,7 @@ exports.getUpcomingFollowups = async (req, res) => {
 
     const now = new Date();
 
-     const wonStatus = await LeadStatus.findOne({ name: "Won" });
+    const wonStatus = await LeadStatus.findOne({ name: "Won" });
 
     const matchStage = {
       isActive: { $ne: false },
@@ -1250,10 +1250,16 @@ exports.getDueFollowups = async (req, res) => {
 
     const now = new Date();
 
+    const wonStatus = await LeadStatus.findOne({ name: "Won" });
+
     const matchStage = {
       isActive: { $ne: false },
       nextFollowupDate: { $ne: null, $exists: true },
     };
+
+    if (wonStatus) {
+      matchStage.leadStatus = { $ne: wonStatus._id };
+    }
 
     if (req.leadScope === "own" && req.user && req.user._id) {
       matchStage.$or = [{ createdBy: req.user._id }, { assignedTo: req.user._id }];
