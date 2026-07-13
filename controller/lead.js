@@ -10,6 +10,7 @@ const Notification = require("../model/notification");
 const ExcelJS = require("exceljs");
 const fs = require("fs");
 const { uploadToExternalService, deleteFileFromExternalService } = require("../utils/externalUploader");
+const { applyHeaderStyle, applyRowStyle, applySheetDefaults, applyStatusTextColor } = require('../utils/excelStyles');
 
 const sanitizeObjectId = (id) => {
   if (id === "" || id === "null" || id === "undefined" || id === null) return undefined;
@@ -1656,8 +1657,6 @@ exports.exportLeadsToExcel = async (req, res) => {
       const arr = status.split(",").map((s) => s.trim()).filter(Boolean);
       query.leadStatus = arr.length === 1 ? arr[0] : { $in: arr };
     }
-
-
     // STAFF
     if (staff) {
       const arr = staff.split(",").map((s) => s.trim()).filter(Boolean);
@@ -1710,25 +1709,11 @@ exports.exportLeadsToExcel = async (req, res) => {
       { header: "Project Type", key: "projecttype", width: 18 },
       { header: "Lead Status", key: "status", width: 18 },
       { header: "Assigned To", key: "assigned", width: 20 },
-      { header: "Priority", key: "priority", width: 12 },
       { header: "Created At", key: "createdAt", width: 18 },
     ];
 
-    // Style header row
-    const headerRow = sheet.getRow(1);
-    headerRow.eachCell((cell) => {
-      cell.fill = {
-        type: "pattern",
-        pattern: "solid",
-        fgColor: { argb: "FF1E40AF" }, // deep blue
-      };
-      cell.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 11 };
-      cell.alignment = { vertical: "middle", horizontal: "center" };
-      cell.border = {
-        bottom: { style: "medium", color: { argb: "FF1E40AF" } },
-      };
-    });
-    headerRow.height = 28;
+    // Style header row — common function
+    applyHeaderStyle(sheet.getRow(1));
 
     // Fill data rows
     leads.forEach((lead, idx) => {
@@ -1743,40 +1728,21 @@ exports.exportLeadsToExcel = async (req, res) => {
         projecttype: lead.projecttype || "",
         status: lead.leadStatus?.name || "",
         assigned: lead.assignedTo?.fullName || "",
-        priority: lead.priority || "",
+
         createdAt: lead.createdAt
           ? new Date(lead.createdAt).toLocaleDateString("en-IN")
           : "",
       });
 
-      // Alternate row shading
-      if (idx % 2 === 0) {
-        row.eachCell((cell) => {
-          cell.fill = {
-            type: "pattern",
-            pattern: "solid",
-            fgColor: { argb: "FFF0F4FF" },
-          };
-        });
-      }
+      // Alternate row Style data — common function
+      applyRowStyle(row, idx);
 
-      row.eachCell((cell) => {
-        cell.alignment = { vertical: "middle", horizontal: "left" };
-        cell.border = {
-          bottom: { style: "thin", color: { argb: "FFE2E8F0" } },
-        };
-      });
-      row.height = 22;
+      const statusCell = row.getCell("status");
+      applyStatusTextColor(statusCell, lead.leadStatus?.name);
     });
 
-    // Freeze header
-    sheet.views = [{ state: "frozen", ySplit: 1 }];
-
-    // Auto-filter
-    sheet.autoFilter = {
-      from: { row: 1, column: 1 },
-      to: { row: 1, column: sheet.columns.length },
-    };
+    // Sheet-level defaults — common function
+    applySheetDefaults(sheet);
 
     // Stream the file
     const fileName = `leads_export_${Date.now()}.xlsx`;

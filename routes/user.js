@@ -5,7 +5,7 @@ const upload = createUploader("images/UserProfileImages");
 
 const authMiddleware = require("../middleware/auth");
 const { authorize } = require("../middleware/permissions");
-const { createUser, loginUser, fetchAllUsers, userDelete, userUpdate, fetchUserById, getCurrentUser } = require("../controller/user");
+const { createUser, loginUser, fetchAllUsers, exportUsersToExcel, userDelete, userUpdate, fetchUserById, getCurrentUser } = require("../controller/user");
 
 router.post("/add-user", upload.single("profileImage"), createUser);
 router.post("/login", loginUser);
@@ -17,6 +17,7 @@ router.get(
   authMiddleware,
   fetchAllUsers,
 );
+router.get("/export", authMiddleware, exportUsersToExcel);
 router.get(
   "/:id",
   authMiddleware,

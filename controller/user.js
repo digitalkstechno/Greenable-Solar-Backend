@@ -3,6 +3,8 @@ const { encryptData, decryptData } = require("../utils/crypto");
 const { deleteUploadedFile } = require("../utils/fileHelper");
 const { uploadToExternalService, deleteFileFromExternalService } = require("../utils/externalUploader");
 const jwt = require("jsonwebtoken");
+const ExcelJS = require('exceljs');
+const { applyHeaderStyle, applyRowStyle, applySheetDefaults } = require('../utils/excelStyles');
 
 exports.createUser = async (req, res) => {
   let profileImage = null;
@@ -264,5 +266,87 @@ exports.userDelete = async (req, res) => {
       status: "Fail",
       message: error.message,
     });
+  }
+};
+
+exports.exportUsersToExcel = async (req, res) => {
+  try {
+    const { search = "" } = req.query;
+
+    const query = {};
+
+    // SEARCH
+    if (search) {
+      query.$or = [
+        { fullName: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } },
+        { phone: { $regex: search, $options: "i" } },
+        { status: { $regex: search, $options: "i" } },
+      ];
+    }
+
+    const users = await STAFF.find(query)
+      .sort({ createdAt: -1 })
+      .populate("role", "roleName name");
+
+    // ── Build Excel ───────────────────────────────────────────────────────────
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = "CRM System";
+    workbook.created = new Date();
+
+    const sheet = workbook.addWorksheet("Users", {
+      pageSetup: { fitToPage: true, orientation: "landscape" },
+    });
+
+    // Column definitions
+    sheet.columns = [
+      { header: "S.No", key: "sno", width: 7 },
+      { header: "Full Name", key: "fullName", width: 22 },
+      { header: "Number", key: "contact", width: 16 },
+      { header: "Email", key: "email", width: 28 },
+      { header: "Status", key: "status", width: 14 },
+      { header: "Department", key: "department", width: 22 },
+      { header: "Created At", key: "createdAt", width: 18 },
+    ];
+
+    // Style header row — common function
+    applyHeaderStyle(sheet.getRow(1));
+
+    // Fill data rows
+    users.forEach((user, idx) => {
+      const row = sheet.addRow({
+        sno: idx + 1,
+        fullName: user.fullName || "",
+        contact: user.phone || "",
+        email: user.email || "",
+        status: user.status ? (user.status.charAt(0).toUpperCase() + user.status.slice(1)) : "Active",
+        department: user.role?.roleName || user.role?.name || "",
+        createdAt: user.createdAt
+          ? new Date(user.createdAt).toLocaleDateString("en-IN")
+          : "",
+      });
+
+      // Row styling — common function
+      applyRowStyle(row, idx);
+    });
+
+    // Sheet-level defaults — common function
+    applySheetDefaults(sheet);
+
+    // Stream the file
+    const fileName = `users_export_${Date.now()}.xlsx`;
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${fileName}"`
+    );
+
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (error) {
+    return res.status(500).json({ status: "Fail", message: error.message });
   }
 };
