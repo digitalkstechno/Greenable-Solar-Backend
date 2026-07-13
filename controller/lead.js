@@ -1,3 +1,4 @@
+const axios = require('axios');
 const LEAD = require("../model/lead");
 const Staff = require("../model/staff");
 const { deleteUploadedFile } = require("../utils/fileHelper");
@@ -2206,5 +2207,41 @@ exports.getPayments = async (req, res) => {
   } catch (error) {
     console.error(error);
     return res.status(500).json({ status: "Fail", message: error.message });
+  }
+};
+
+exports.downloadAttachment = async (req, res) => {
+  try {
+    const { url, filename } = req.query;
+
+    if (!url) {
+      return res.status(400).json({ status: 'Fail', message: 'File URL is required' });
+    }
+
+    const response = await axios.get(url, {
+      responseType: 'stream',
+      timeout: 60000, // 1 min
+    });
+
+    const contentType = response.headers['content-type'] || 'application/octet-stream';
+    const downloadName = filename || url.split('/').pop() || 'download';
+
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${downloadName}"`);
+
+    response.data.pipe(res);
+
+    response.data.on('error', (err) => {
+      console.error('Stream error during download:', err.message);
+      if (!res.headersSent) {
+        res.status(500).json({ status: 'Fail', message: 'Failed to stream file' });
+      }
+    });
+  } catch (error) {
+    console.error('Download attachment error:', error.message);
+    return res.status(500).json({
+      status: 'Fail',
+      message: error.response?.data?.message || error.message || 'Failed to download attachment',
+    });
   }
 };

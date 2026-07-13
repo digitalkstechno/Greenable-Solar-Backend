@@ -21,5 +21,6 @@ router.use("/stock", require("./stockTransaction"));
 router.use("/users", require("./user"));
 router.use("/project-detail", require("./projectDetail"));
 router.use("/dashboard", require("./dashboard"));
+router.use("/quotation", require("./quotation")); 
 
 module.exports = router;

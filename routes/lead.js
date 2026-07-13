@@ -25,6 +25,7 @@ let {
   getMyDueFollowups,
   getWonLeads,
   getLostLeads,
+  downloadAttachment,
   deleteAttachment,
   exportLeadsToExcel,
   downloadImportTemplate,
@@ -78,6 +79,9 @@ router.get(
 router.get("/won", authMiddleware, leadReadScope(), getWonLeads);
 router.get("/lost", authMiddleware, leadReadScope(), getLostLeads);
 router.get("/export", authMiddleware, leadReadScope(), exportLeadsToExcel);
+//attachment download
+router.get("/attachments/download", authMiddleware, downloadAttachment);
+
 router.get("/import-template", authMiddleware, authorize("lead", "create"), downloadImportTemplate);
 router.post("/bulk-import", authMiddleware, authorize("lead", "create"), importUpload.single("file"), bulkImportLeads);
 router.get("/:id", authMiddleware, leadReadScope(), fetchLeadById);

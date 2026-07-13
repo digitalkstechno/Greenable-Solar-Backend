@@ -65,16 +65,6 @@ exports.getDashboard = async (req, res) => {
             .populate("leadStatus", "name")
             .populate("assignedTo", "fullName");
 
-        console.log("Total leads fetched:", leads.length);
-        console.log("abc na leads (assignedTo check):",
-            leads.filter(l => l.assignedTo?.fullName === "abc").map(l => ({
-                id: l._id,
-                status: l.leadStatus?.name,
-                createdAt: l.createdAt,
-                assignedToId: l.assignedTo?._id
-            }))
-        );
-
         const allStatuses = await LeadStatus.find({}, "name");
 
         let totalLeads = leads.length;
@@ -146,9 +136,6 @@ exports.getDashboard = async (req, res) => {
         // });
 
         leads.forEach((lead) => {
-            // console.log("**************", leads.find(l => l.leadStatus.name))
-            // console.log("lead", leads.length)
-
             const statusName = lead.leadStatus?.name || "Unknown";
             const source = lead.leadrefrance || "Unknown";
             const assignedId = lead.assignedTo?._id ? String(lead.assignedTo._id) : null;
@@ -157,7 +144,6 @@ exports.getDashboard = async (req, res) => {
             sourceCountMap[source] = (sourceCountMap[source] || 0) + 1;
 
             const status = statusName.toLowerCase().trim();
-            // console.log("status******", status)
             if (assignedId && assignmentMap[assignedId]) {
                 assignmentMap[assignedId].total++;
                 if (status === "new lead") assignmentMap[assignedId].newLead++;
@@ -212,8 +198,6 @@ exports.getDashboard = async (req, res) => {
             followUps,
             totalRevenue,
         };
-
-        console.log("Count*", counts)
 
         const charts = {};
 
