@@ -8,6 +8,7 @@ dayjs.extend(timezone);
 dayjs.tz.setDefault("Asia/Kolkata");
 const User = require("../model/user");
 const Staff = require("../model/staff");
+const Department = require("../model/role");
 
 exports.getDashboard = async (req, res) => {
     try {
@@ -63,7 +64,8 @@ exports.getDashboard = async (req, res) => {
         // ---------- Fetch data ----------
         const leads = await Lead.find(filter)
             .populate("leadStatus", "name")
-            .populate("assignedTo", "fullName");
+            .populate("assignedTo", "fullName")
+            .populate("leadrefrance", "name")
 
         const allStatuses = await LeadStatus.find({}, "name");
 
@@ -81,21 +83,25 @@ exports.getDashboard = async (req, res) => {
             statusCountMap[s.name] = 0;
         });
 
-        // const allUsers = await Staff.find({ status: "active" }, "fullName role ").populate("role", "roleName");
-        // const salesDeptUsers = allUsers.filter((u) => {
-        //     const roleName = (u.role?.roleName || "").toUpperCase();
-        //     return roleName.includes("SALES")
-        // });
+        // const allUsers = await Staff.find({ status: "active" }, "fullName role").populate("role", "roleName");
+        // const salesDeptUsers = allUsers.filter((u) =>
+        //     (u.role?.roleName || "").toUpperCase().includes("SALES")
+        // );
 
-        const allUsers = await Staff.find({ status: "active" }, "fullName role").populate("role", "roleName");
-        const salesDeptUsers = allUsers.filter((u) =>
-            (u.role?.roleName || "").toUpperCase().includes("SALES")
-        );
+        const allUsers = await Staff.find({ status: "active" }, "fullName role department").populate("role", "roleName");
+        const allDepartments = await Department.find({}, "roleName name");
 
-        // const assignmentMap = {};
-        // salesDeptUsers.forEach((u) => {
-        //     assignmentMap[u.fullName] = { newLead: 0, won: 0, lost: 0, total: 0 };
-        // });
+        const salesDeptUsers = allUsers.filter((u) => {
+            const roleName = (u.role?.roleName || "").trim().toUpperCase();
+            const dept = allDepartments.find((d) => String(d._id) === String(u.department));
+            const deptName = (dept?.roleName || dept?.name || "").trim().toUpperCase();
+
+            const isSalesRole = roleName === "SALES" || /^SALES\b/.test(roleName);
+            const isSalesDept = deptName === "SALES DEPARTMENT" || deptName === "SALES";
+            const isTeleSales = deptName.includes("TELESALES") || deptName.includes("TELE SALES");
+
+            return !isTeleSales && (isSalesRole || isSalesDept);
+        });
 
         const assignmentMap = {};
         const staffIdToName = {};
@@ -105,39 +111,9 @@ exports.getDashboard = async (req, res) => {
             staffIdToName[id] = (u.fullName || "").trim();
         });
 
-        // leads.forEach((lead) => {
-        //     const statusName = lead.leadStatus?.name || "Unknown";
-        //     const source = lead.leadrefrance || "Unknown";
-        //     const salesName = lead.assignedTo?.fullName || "Unassigned";
-
-        //     statusCountMap[statusName] = (statusCountMap[statusName] || 0) + 1;
-        //     sourceCountMap[source] = (sourceCountMap[source] || 0) + 1;
-
-        //     const status = statusName.toLowerCase().trim();
-
-        //     if (assignmentMap[salesName]) {
-        //         assignmentMap[salesName].total++;
-        //         if (status === "new lead") assignmentMap[salesName].newLead++;
-        //         else if (status === "won") assignmentMap[salesName].won++;
-        //         else if (status === "lost") assignmentMap[salesName].lost++;
-        //     }
-
-        //     if (status === "new lead") totalNewLeads++;
-        //     else if (status === "won") totalWonLeads++;
-        //     else if (status === "lost") totalLostLeads++;
-
-        //     if (lead.nextFollowupDate) followUps++;
-
-        //     if (lead.payments && lead.payments.length > 0) {
-        //         lead.payments.forEach((p) => {
-        //             totalRevenue += p.amount || 0;
-        //         });
-        //     }
-        // });
-
         leads.forEach((lead) => {
             const statusName = lead.leadStatus?.name || "Unknown";
-            const source = lead.leadrefrance || "Unknown";
+            const source = lead.leadrefrance?.name || "Unknown";
             const assignedId = lead.assignedTo?._id ? String(lead.assignedTo._id) : null;
 
             statusCountMap[statusName] = (statusCountMap[statusName] || 0) + 1;
@@ -181,11 +157,11 @@ exports.getDashboard = async (req, res) => {
         //     ...data,
         //     total: data.total || 0,
         // }));
+
         const salesExecutive = Object.entries(assignmentMap).map(([id, data]) => ({
             salesName: staffIdToName[id],
             ...data,
         }));
-
 
         // Total leads for salesExecutive section = sum of all sales exec leads
         // const salesExecutiveTotalLeads = salesExecutive.reduce((sum, s) => sum + (s.total || 0), 0);

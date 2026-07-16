@@ -1686,7 +1686,8 @@ exports.exportLeadsToExcel = async (req, res) => {
     const leads = await LEAD.find(query)
       .sort({ createdAt: -1 })
       .populate("leadStatus", "name")
-      .populate("assignedTo", "fullName email");
+      .populate("assignedTo", "fullName email")
+      .populate("leadrefrance", "name");
 
     // ── Build Excel ───────────────────────────────────────────────────────────
     const workbook = new ExcelJS.Workbook();
@@ -1724,7 +1725,7 @@ exports.exportLeadsToExcel = async (req, res) => {
         phone: lead.contact || "",
         kwRequirement: lead.kwRequirement || "",
         discomName: lead.discomName || "",
-        leadrefrance: lead.leadrefrance || "",
+        leadrefrance: lead.leadrefrance?.name || "",
         projecttype: lead.projecttype || "",
         status: lead.leadStatus?.name || "",
         assigned: lead.assignedTo?.fullName || "",
