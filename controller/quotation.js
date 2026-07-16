@@ -91,8 +91,42 @@ const wrapSegmentsToLines = (doc, segments, maxWidth, fontSize, baseFontStyle) =
     doc.setFontSize(fontSize);
     doc.setFont('helvetica', baseFontStyle);
 
+    // Break a single word into character-level chunks that each fit maxWidth
+    const breakLongWord = (word) => {
+        const chunks = [];
+        let chunk = '';
+        for (const ch of word.text) {
+            const testWidth = doc.getTextWidth(chunk + ch);
+            if (testWidth > maxWidth && chunk !== '') {
+                chunks.push({ text: chunk, highlighted: word.highlighted });
+                chunk = ch;
+            } else {
+                chunk += ch;
+            }
+        }
+        if (chunk !== '') chunks.push({ text: chunk, highlighted: word.highlighted });
+        return chunks;
+    };
+
     words.forEach(word => {
-        const wWidth = doc.getTextWidth(word.text);
+        let wWidth = doc.getTextWidth(word.text);
+
+        // If the word itself is wider than the max width, break it into smaller chunks
+        if (wWidth > maxWidth && word.text.trim() !== '') {
+            const chunks = breakLongWord(word);
+            chunks.forEach((chunkWord, idx) => {
+                const chunkWidth = doc.getTextWidth(chunkWord.text);
+                if (currentWidth + chunkWidth > maxWidth && currentLine.length > 0) {
+                    lines.push(currentLine);
+                    currentLine = [];
+                    currentWidth = 0;
+                }
+                currentLine.push(chunkWord);
+                currentWidth += chunkWidth;
+            });
+            return;
+        }
+
         if (currentWidth + wWidth > maxWidth && currentLine.length > 0) {
             lines.push(currentLine);
             currentLine = [];
