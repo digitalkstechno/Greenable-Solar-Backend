@@ -26,7 +26,8 @@ const LeadSchema = new Schema(
     },
 
     leadrefrance: {
-      type: String,
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "leadSource",
     },
 
     address: {
