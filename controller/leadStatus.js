@@ -33,9 +33,34 @@ exports.fetchAllLeadStatus = async (req, res) => {
   try {
 
     const allStatuses = await LEADSTATUS.find();
-    for (const status of allStatuses) {
-      const actualCount = await LEAD.countDocuments({ leadStatus: status._id });
-      await LEADSTATUS.findByIdAndUpdate(status._id, { count: actualCount });
+    // for (const status of allStatuses) {
+    //   const actualCount = await LEAD.countDocuments({ leadStatus: status._id });
+    //   await LEADSTATUS.findByIdAndUpdate(status._id, { count: actualCount });
+    // }
+
+    // Get counts for ALL statuses in a single aggregation query
+    const countsAgg = await LEAD.aggregate([
+      { $group: { _id: "$leadStatus", count: { $sum: 1 } } },
+    ]);
+
+    // Build a quick lookup map: statusId -> count
+    const countMap = {};
+    countsAgg.forEach((c) => {
+      if (c._id) countMap[c._id.toString()] = c.count;
+    });
+
+    // Prepare bulk update operations (only for statuses whose count actually changed)
+    const bulkOps = allStatuses
+      .filter((status) => (status.count || 0) !== (countMap[status._id.toString()] || 0))
+      .map((status) => ({
+        updateOne: {
+          filter: { _id: status._id },
+          update: { count: countMap[status._id.toString()] || 0 },
+        },
+      }));
+
+    if (bulkOps.length > 0) {
+      await LEADSTATUS.bulkWrite(bulkOps);
     }
 
     const search = req.query.search || "";

@@ -37,6 +37,10 @@ const LeadSchema = new Schema(
       type: String,
     },
 
+    coordinates: {
+      type: String
+    },
+
     leadStatus: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "leadStatus",
