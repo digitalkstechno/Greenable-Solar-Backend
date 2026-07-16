@@ -601,8 +601,6 @@ exports.fetchLeadsForKanban = async (req, res) => {
       }
     }
 
-
-
     // 🔥 STAFF FILTER (handle comma-separated values)
     if (staff) {
       const staffArr = staff.split(',').filter(s => s.trim());
@@ -703,8 +701,6 @@ exports.fetchKanbanLeadsByStatus = async (req, res) => {
       match.$and = andConditions;
     }
 
-
-
     if (staff) {
       const staffArr = staff.split(',').filter(s => s.trim());
       if (staffArr.length === 1) match.assignedTo = staffArr[0];
@@ -771,6 +767,7 @@ exports.fetchKanbanLeadsByStatus = async (req, res) => {
     const leads = await LEAD.find(match)
       .populate("leadStatus")
       .populate("assignedTo")
+      .populate("leadrefrance") 
       .populate("createdBy")
       .sort({ createdAt: -1 })
       .skip(skip)
