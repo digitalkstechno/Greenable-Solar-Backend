@@ -10,6 +10,9 @@ let RoleSchema = new Schema(
     },
     permissions: [
       {
+        dashboard: {
+          readAll: { type: Boolean, default: false },
+        },
         lead: {
           create: { type: Boolean, default: false },
           readOwn: { type: Boolean, default: false },

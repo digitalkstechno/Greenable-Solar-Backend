@@ -68,8 +68,33 @@ function leadReadScope() {
   };
 }
 
+function dashboardReadScope() {
+  return (req, res, next) => {
+    const user = req.user;
+    if (!user || !user.role) {
+      return res.status(403).json({
+        status: "Fail",
+        message: "Access denied",
+      });
+    }
+
+    const perms = getRolePermissions(user.role);
+    const dashboardPerms = perms.dashboard || {};
+
+    if (dashboardPerms.readAll) {
+      return next();
+    }
+
+    return res.status(403).json({
+      status: "Fail",
+      message: "Access denied",
+    });
+  };
+}
+
 module.exports = {
   authorize,
   leadReadScope,
+  dashboardReadScope,
 };
 

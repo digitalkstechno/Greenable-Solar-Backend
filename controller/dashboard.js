@@ -131,16 +131,26 @@ exports.getDashboard = async (req, res) => {
             else if (status === "won") totalWonLeads++;
             else if (status === "lost") totalLostLeads++;
 
-            if (
-                lead.nextFollowupDate &&
-                status !== "won" &&  // "Upcoming Follow-ups" list Won leads exclude 
-                dayjs(lead.nextFollowupDate).tz("Asia/Kolkata").isAfter(dayjs().tz("Asia/Kolkata"))
-            ) {
-                followUps++;
+            // if (
+            //     lead.nextFollowupDate &&
+            //     status !== "won" &&  // "Upcoming Follow-ups" list Won leads exclude 
+            //     dayjs(lead.nextFollowupDate).tz("Asia/Kolkata").isAfter(dayjs().tz("Asia/Kolkata"))
+            // ) {
+            //     followUps++;
+            // }
+            if (lead.nextFollowupDate && status !== "won") {
+                const datePart = dayjs(lead.nextFollowupDate).format("YYYY-MM-DD");
+                const timePart = lead.nextFollowupTime && lead.nextFollowupTime.trim() !== ""
+                    ? lead.nextFollowupTime
+                    : "00:00";
+                const followupDateTime = dayjs.tz(`${datePart} ${timePart}`, "YYYY-MM-DD HH:mm", "Asia/Kolkata");
+
+                if (followupDateTime.isValid() && followupDateTime.isAfter(dayjs().tz("Asia/Kolkata"))) {
+                    followUps++;
+                }
             }
             if (lead.payments?.length) lead.payments.forEach((p) => (totalRevenue += p.amount || 0));
         });
-
 
         const leadStatus = Object.entries(statusCountMap).map(([status, count]) => ({
             status,

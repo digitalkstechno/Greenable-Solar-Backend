@@ -7,10 +7,11 @@ const {
     getFollowupAnalysis,
 } = require("../controller/dashboard");
 const authMiddleware = require("../middleware/auth");
+const { dashboardReadScope } = require("../middleware/permissions");
 
-router.get("/", authMiddleware, getDashboard);
-router.get("/revenue", authMiddleware, getRevenueChart);
-router.get("/kw-growth", authMiddleware, getKwGrowthChart);
-router.get("/followup-analysis", authMiddleware, getFollowupAnalysis);
+router.get("/", authMiddleware, dashboardReadScope(), getDashboard);
+router.get("/revenue", authMiddleware, dashboardReadScope(), getRevenueChart);
+router.get("/kw-growth", authMiddleware, dashboardReadScope(), getKwGrowthChart);
+router.get("/followup-analysis", authMiddleware, dashboardReadScope(), getFollowupAnalysis);
 
 module.exports = router;
