@@ -381,8 +381,13 @@ exports.leadUpdate = async (req, res) => {
     else delete updateData.leadStatus;
 
     const sanitizedAssigned = sanitizeObjectId(updateData.assignedTo);
-    if (sanitizedAssigned !== undefined) updateData.assignedTo = sanitizedAssigned;
-    else delete updateData.assignedTo;
+    if (sanitizedAssigned !== undefined) {
+      updateData.assignedTo = sanitizedAssigned;
+    } else {
+      updateData.$unset = updateData.$unset || {};
+      updateData.$unset.assignedTo = 1;
+      delete updateData.assignedTo;
+    }
 
 
     let currentAttachments = [...(oldLeads.attachments || [])];

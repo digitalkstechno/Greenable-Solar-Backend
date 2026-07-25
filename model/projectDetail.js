@@ -22,9 +22,14 @@ const ProjectDetailSchema = new Schema(
 
     // ── Project Details ──────────────────────────────────────────────────────
     creatorName: { type: String },
+    customerFullName: { type: String },
+    registerMobileNumber: { type: String },
+    registrationPortal: { type: String, enum: ["NP", "GEDA"] },
+    panelType: { type: String, enum: ["DCR", "NDCR"] },
     panelMake: { type: String },
     panelWp: { type: Number },
     noOfPanel: { type: Number },
+    totalKw: { type: Number },
     inverterMake: { type: String },
     inverterKw: { type: Number },
     inverterPhase: { type: String, enum: ["single", "three"] },
@@ -67,6 +72,7 @@ const ProjectDetailSchema = new Schema(
     projectAmount: { type: Number },
     subsidyLessProject: { type: String, enum: ["yes", "no"] },
     applyForLoan: { type: Boolean, default: false },
+    loanPortal: { type: String },
 
     // ── Required Documents for Loan ──────────────────────────────────────────
     loanDocQuotation: fileSchema,

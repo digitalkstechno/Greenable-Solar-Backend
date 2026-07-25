@@ -26,13 +26,14 @@ exports.upsertProjectDetail = async (req, res) => {
 
     // Parse body (text fields)
     const {
-      creatorName, panelMake, panelWp, noOfPanel,
+      creatorName, customerFullName, registerMobileNumber, registrationPortal, panelType,
+      panelMake, panelWp, noOfPanel,
       inverterMake, inverterKw, inverterPhase, installationRoof,
       discom, consumerConnectionType, elcbInstalled, elcbProvideBy,
       wiringType, homeFloor, walkway, walkwayLengthFeet,
       ladder, ladderLengthFeet, hdgiPipeMake,
       hdgiPipe80x40, hdgiPipe60x40, hdgiPipe40x40, hdgiPipe20x40PatiPipe,
-      paymentMode, projectAmount, subsidyLessProject, applyForLoan,
+      paymentMode, projectAmount, subsidyLessProject, applyForLoan, loanPortal, totalKw
     } = req.body;
 
     // Map uploaded files by fieldname
@@ -45,9 +46,11 @@ exports.upsertProjectDetail = async (req, res) => {
 
     const update = {
       lead: leadId,
-      creatorName, panelMake,
+      creatorName, customerFullName, registerMobileNumber, registrationPortal, panelType,
+      panelMake,
       panelWp: panelWp ? Number(panelWp) : undefined,
       noOfPanel: noOfPanel ? Number(noOfPanel) : undefined,
+      totalKw: totalKw ? Number(totalKw) : ((panelWp && noOfPanel) ? (Number(panelWp) * Number(noOfPanel)) / 1000 : undefined),
       inverterMake,
       inverterKw: inverterKw ? Number(inverterKw) : undefined,
       inverterPhase, installationRoof, discom,
@@ -63,6 +66,7 @@ exports.upsertProjectDetail = async (req, res) => {
       hdgiPipe20x40PatiPipe: hdgiPipe20x40PatiPipe !== undefined ? Number(hdgiPipe20x40PatiPipe) : undefined,
       paymentMode, subsidyLessProject,
       applyForLoan: applyForLoan !== undefined ? (applyForLoan === 'true' || applyForLoan === true) : undefined,
+      loanPortal,
       projectAmount: projectAmount ? Number(projectAmount) : undefined,
       createdBy: req.user?._id,
     };
@@ -127,7 +131,11 @@ exports.getProjectDetail = async (req, res) => {
     );
 
     if (detail) {
-      return res.status(200).json({ status: "Success", data: detail });
+      const dataObj = detail.toObject ? detail.toObject() : detail;
+      if (!dataObj.totalKw && dataObj.panelWp && dataObj.noOfPanel) {
+        dataObj.totalKw = (dataObj.panelWp * dataObj.noOfPanel) / 1000;
+      }
+      return res.status(200).json({ status: "Success", data: dataObj });
     }
 
     // If no project detail found, try to auto-extract from the latest or selected quotation
@@ -180,6 +188,7 @@ exports.getProjectDetail = async (req, res) => {
       panelMake: finalPanelMake,
       panelWp: panelWp ? Number(panelWp) : undefined,
       noOfPanel: noOfPanel ? Number(noOfPanel) : undefined,
+      totalKw: (panelWp && noOfPanel) ? (Number(panelWp) * Number(noOfPanel)) / 1000 : undefined,
       inverterMake: finalInverterMake,
       inverterKw: inverterKw ? Number(inverterKw) : undefined,
       discom: discom ? discom.toLowerCase() : undefined,
