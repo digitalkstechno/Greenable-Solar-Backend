@@ -21,28 +21,38 @@ const ProjectDetailSchema = new Schema(
     },
 
     // ── Project Details ──────────────────────────────────────────────────────
+    projectCode: { type: String },
+    srNo: { type: String },
+    salesPersonName: { type: String },
     creatorName: { type: String },
     customerFullName: { type: String },
     registerMobileNumber: { type: String },
-    registrationPortal: { type: String, enum: ["NP", "GEDA"] },
-    panelType: { type: String, enum: ["DCR", "NDCR"] },
+    locationLink: { type: String },
+    address: { type: String },
+    city: { type: String },
+    pincode: { type: String },
+    consumerNo: { type: String },
+    division: { type: String },
+    subDivision: { type: String },
+    registrationPortal: { type: String },
+    panelType: { type: String },
     panelMake: { type: String },
     panelWp: { type: Number },
     noOfPanel: { type: Number },
     totalKw: { type: Number },
     inverterMake: { type: String },
     inverterKw: { type: Number },
-    inverterPhase: { type: String, enum: ["single", "three"] },
-    installationRoof: { type: String, enum: ["rcc", "gi sheet", "rcc+gisheet"] },
-    discom: { type: String, enum: ["dgvcl", "torrent"] },
-    consumerConnectionType: { type: String, enum: ["single", "three"] },
-    elcbInstalled: { type: String, enum: ["yes", "no"] },
-    elcbProvideBy: { type: String, enum: ["greeneable", "customer"] },
-    wiringType: { type: String, enum: ["open", "consild"] },
+    inverterPhase: { type: String },
+    installationRoof: { type: String },
+    discom: { type: String },
+    consumerConnectionType: { type: String },
+    elcbInstalled: { type: String },
+    elcbProvideBy: { type: String },
+    wiringType: { type: String },
     homeFloor: { type: String },
-    walkway: { type: String, enum: ["yes", "no"] },
+    walkway: { type: String },
     walkwayLengthFeet: { type: Number },
-    ladder: { type: String, enum: ["yes", "no"] },
+    ladder: { type: String },
     ladderLengthFeet: { type: Number },
     hdgiPipeMake: { type: String },
 
@@ -51,6 +61,13 @@ const ProjectDetailSchema = new Schema(
     hdgiPipe60x40: { type: Number, default: 0 },
     hdgiPipe40x40: { type: Number, default: 0 },
     hdgiPipe20x40PatiPipe: { type: Number, default: 0 },
+
+    // ── Bank and Payment Details ──────────────────────────────────────────────
+    bankName: { type: String },
+    accountNo: { type: String },
+    ifscCode: { type: String },
+    branchName: { type: String },
+    accountHolderName: { type: String },
 
     // ── Required Photos for Installation ────────────────────────────────────
     photoTerraceLayout: fileSchema,
@@ -68,11 +85,19 @@ const ProjectDetailSchema = new Schema(
     docAadhaarCard: fileSchema,
 
     // ── Payment Details ──────────────────────────────────────────────────────
-    paymentMode: { type: String, enum: ["cash", "cheque"] },
+    paymentMode: { type: String },
     projectAmount: { type: Number },
-    subsidyLessProject: { type: String, enum: ["yes", "no"] },
+    subsidyLessProject: { type: String },
     applyForLoan: { type: Boolean, default: false },
     loanPortal: { type: String },
+
+    // ── Payment Amounts & Proof Documents ─────────────────────────────────
+    downPaymentAmount: { type: Number },
+    downPaymentDoc: fileSchema,
+    loanFirstPaymentAmount: { type: Number },
+    loanFirstPaymentDoc: fileSchema,
+    loanSecondPaymentAmount: { type: Number },
+    loanSecondPaymentDoc: fileSchema,
 
     // ── Required Documents for Loan ──────────────────────────────────────────
     loanDocQuotation: fileSchema,
@@ -80,6 +105,8 @@ const ProjectDetailSchema = new Schema(
     loanDocITRReturn: fileSchema,
     loanDocPanCard: fileSchema,
     loanDocAadhaarCard: fileSchema,
+
+    isFullyCompleted: { type: Boolean, default: false },
 
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,

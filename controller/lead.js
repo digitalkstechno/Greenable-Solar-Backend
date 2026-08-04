@@ -154,16 +154,48 @@ exports.fetchAllLeads = async (req, res) => {
     /* =====================
        STATUS FILTER
     ====================== */
-    if (status) {
+    const mongoose = require("mongoose");
+    const LeadStatusModel = require("../model/leadStatus");
+    const userRoleStr = (typeof req.user?.role === 'string' ? req.user.role : (req.user?.role?.roleName || req.user?.role?.name || '')).toLowerCase().replace(/\s+/g, '');
+    const isBackOfficeUser = userRoleStr.includes('backoffice');
+    if (isBackOfficeUser) {
+      const wonStatuses = await LeadStatusModel.find({ name: { $regex: /won/i } });
+      const ProjectDetail = require("../model/projectDetail");
+      const filledDetails = await ProjectDetail.find({
+        $or: [
+          { isFullyCompleted: true },
+          { paymentMode: { $exists: true, $ne: "" } },
+          { projectAmount: { $exists: true, $ne: null } },
+          { bankName: { $exists: true, $ne: "" } }
+        ]
+      }).select('lead').lean();
+      const filledLeadIds = filledDetails
+        .map(pd => pd.lead)
+        .filter(Boolean)
+        .map(id => (typeof id === 'string' ? new mongoose.Types.ObjectId(id) : id));
+      if (wonStatuses.length > 0) {
+        query.leadStatus = { $in: wonStatuses.map(s => s._id) };
+        query._id = { $in: filledLeadIds };
+      }
+    } else if (status) {
       const statusArr = status.split(',').map(s => s.trim()).filter(Boolean);
-      if (statusArr.length === 1) {
-        query.leadStatus = statusArr[0];
-      } else if (statusArr.length > 1) {
-        query.leadStatus = { $in: statusArr };
+      const objectIds = statusArr.filter(s => s.match(/^[0-9a-fA-F]{24}$/)).map(s => new mongoose.Types.ObjectId(s));
+      const names = statusArr.filter(s => !s.match(/^[0-9a-fA-F]{24}$/));
+
+      let matchingStatusIds = [...objectIds];
+      if (names.length > 0) {
+        const foundStatuses = await LeadStatusModel.find({
+          name: { $in: names.map(n => new RegExp(`^${n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i')) }
+        });
+        matchingStatusIds.push(...foundStatuses.map(s => s._id));
+      }
+
+      if (matchingStatusIds.length === 1) {
+        query.leadStatus = matchingStatusIds[0];
+      } else if (matchingStatusIds.length > 1) {
+        query.leadStatus = { $in: matchingStatusIds };
       }
     }
-
-
 
     /* =====================
        STAFF FILTER
@@ -189,7 +221,7 @@ exports.fetchAllLeads = async (req, res) => {
     }
 
     if (staff) {
-      const staffArr = staff.split(',').map(s => s.trim()).filter(Boolean);
+      const staffArr = staff.split(',').map(s => s.trim()).filter(s => s.match(/^[0-9a-fA-F]{24}$/));
       if (staffArr.length === 1) {
         query.assignedTo = staffArr[0];
       } else if (staffArr.length > 1) {
@@ -232,36 +264,50 @@ exports.fetchAllLeads = async (req, res) => {
     const totalLeads = await LEAD.countDocuments(query);
 
     let totals = null;
-    const LeadStatus = require("../model/leadStatus");
-    const isWonFilter = status && await LeadStatus.find({ _id: { $in: status.split(',') }, name: { $regex: /^won$/i } }).then(res => res.length > 0);
+
+    let isWonFilter = false;
+    if (isBackOfficeUser) {
+      isWonFilter = true;
+    } else if (status) {
+      const validStatusIds = status.split(',').map(s => s.trim()).filter(s => s.match(/^[0-9a-fA-F]{24}$/));
+      if (validStatusIds.length > 0) {
+        const foundWon = await LeadStatusModel.find({ _id: { $in: validStatusIds }, name: { $regex: /^won$/i } });
+        isWonFilter = foundWon.length > 0;
+      }
+    }
 
     if (isWonFilter) {
-      const totalStats = await LEAD.aggregate([
-        { $match: query },
-        {
-          $lookup: {
-            from: "projectdetails",
-            localField: "_id",
-            foreignField: "lead",
-            as: "projectDetail"
+      try {
+        const totalStats = await LEAD.aggregate([
+          { $match: query },
+          {
+            $lookup: {
+              from: "projectdetails",
+              localField: "_id",
+              foreignField: "lead",
+              as: "projectDetail"
+            }
+          },
+          { $unwind: { path: "$projectDetail", preserveNullAndEmptyArrays: true } },
+          {
+            $group: {
+              _id: null,
+              totalKwReq: { $sum: { $convert: { input: "$kwRequirement", to: "double", onError: 0, onNull: 0 } } },
+              totalProjectAmount: { $sum: "$projectDetail.projectAmount" },
+              totalPaymentAmount: { $sum: "$paymentAmount" }
+            }
           }
-        },
-        { $unwind: { path: "$projectDetail", preserveNullAndEmptyArrays: true } },
-        {
-          $group: {
-            _id: null,
-            totalKwReq: { $sum: { $convert: { input: "$kwRequirement", to: "double", onError: 0, onNull: 0 } } },
-            totalProjectAmount: { $sum: "$projectDetail.projectAmount" },
-            totalPaymentAmount: { $sum: "$paymentAmount" }
-          }
-        }
-      ]);
-      const stats = totalStats[0] || { totalKwReq: 0, totalProjectAmount: 0, totalPaymentAmount: 0 };
-      totals = {
-        totalKwReq: stats.totalKwReq || 0,
-        totalAmount: stats.totalProjectAmount || 0,
-        totalPendingAmount: (stats.totalProjectAmount || 0) - (stats.totalPaymentAmount || 0)
-      };
+        ]);
+        const stats = totalStats[0] || { totalKwReq: 0, totalProjectAmount: 0, totalPaymentAmount: 0 };
+        totals = {
+          totalKwReq: stats.totalKwReq || 0,
+          totalAmount: stats.totalProjectAmount || 0,
+          totalPendingAmount: (stats.totalProjectAmount || 0) - (stats.totalPaymentAmount || 0)
+        };
+      } catch (aggErr) {
+        console.error("Aggregation totals error:", aggErr);
+        totals = { totalKwReq: 0, totalAmount: 0, totalPendingAmount: 0 };
+      }
     }
 
     const LeadData = await LEAD.find(query)
@@ -299,6 +345,7 @@ exports.fetchAllLeads = async (req, res) => {
       totals: totals
     });
   } catch (error) {
+    console.error("fetchAllLeads error:", error);
     return res.status(500).json({
       status: "Fail",
       message: error.message,
@@ -597,7 +644,20 @@ exports.fetchLeadsForKanban = async (req, res) => {
     }
 
     // 🔥 STATUS FILTER (handle comma-separated values)
-    if (status) {
+    const isBackOfficeUser = (req.user?.role?.roleName || '').toLowerCase().replace(/\s+/g, '').includes('backoffice');
+    if (isBackOfficeUser) {
+      const wonStatus = await LeadStatus.findOne({ name: { $regex: /won/i } });
+      const ProjectDetail = require("../model/projectDetail");
+      const filledDetails = await ProjectDetail.find({}).select('lead').lean();
+      const filledLeadIds = filledDetails
+        .map(pd => pd.lead)
+        .filter(Boolean)
+        .map(id => (typeof id === 'string' ? new mongoose.Types.ObjectId(id) : id));
+      if (wonStatus) {
+        match.leadStatus = wonStatus._id;
+        match._id = { $in: filledLeadIds };
+      }
+    } else if (status) {
       const statusArr = status.split(',').filter(s => s.trim());
       if (statusArr.length === 1) {
         match.leadStatus = statusArr[0];
@@ -683,6 +743,31 @@ exports.fetchLeadsForKanban = async (req, res) => {
 exports.fetchKanbanLeadsByStatus = async (req, res) => {
   try {
     const { statusId, search, staff, date, source, page = 1, limit = 10 } = req.query;
+    const LeadStatusModel = require("../model/leadStatus");
+    
+    const isValidStatusId = statusId && typeof statusId === 'string' && statusId.match(/^[0-9a-fA-F]{24}$/);
+    
+    const isBackOfficeUser = (req.user?.role?.roleName || '').toLowerCase().replace(/\s+/g, '').includes('backoffice');
+    if (isBackOfficeUser) {
+      const wonStatus = await LeadStatusModel.findOne({ name: { $regex: /^won$/i } });
+      if (!wonStatus || !isValidStatusId || String(statusId) !== String(wonStatus._id)) {
+        return res.status(200).json({
+          status: "Success",
+          message: "Back office users can only view WON leads",
+          pagination: { totalRecords: 0, currentPage: 1, totalPages: 0, limit: parseInt(limit) },
+          data: [],
+        });
+      }
+    }
+
+    if (!isValidStatusId) {
+      return res.status(200).json({
+        status: "Success",
+        data: [],
+        pagination: { totalRecords: 0, currentPage: 1, totalPages: 0, limit: parseInt(limit) }
+      });
+    }
+
     const match = { leadStatus: statusId };
     const myOnly = req.query.my === 'true';
     const andConditions = [];
@@ -707,7 +792,7 @@ exports.fetchKanbanLeadsByStatus = async (req, res) => {
     }
 
     if (staff) {
-      const staffArr = staff.split(',').filter(s => s.trim());
+      const staffArr = staff.split(',').filter(s => s.trim().match(/^[0-9a-fA-F]{24}$/));
       if (staffArr.length === 1) match.assignedTo = staffArr[0];
       else if (staffArr.length > 1) match.assignedTo = { $in: staffArr };
     }
@@ -722,8 +807,8 @@ exports.fetchKanbanLeadsByStatus = async (req, res) => {
         const sources = await LeadSource.find({ _id: { $in: objectIds } });
         namesToSearch.push(...sources.map(s => s.name));
       }
-      if (namesToSearch.length === 1) match.leadrefrance = { $regex: new RegExp(namesToSearch[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') };
-      else if (namesToSearch.length > 1) match.leadrefrance = { $in: namesToSearch.map(s => new RegExp(s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')) };
+      if (namesToSearch.length === 1) match.leadrefrance = new RegExp(`^${namesToSearch[0]}$`, 'i');
+      else if (namesToSearch.length > 1) match.leadrefrance = { $in: namesToSearch.map(s => new RegExp(`^${s}$`, 'i')) };
     }
 
     if (date) {
@@ -737,8 +822,7 @@ exports.fetchKanbanLeadsByStatus = async (req, res) => {
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     let totals = null;
-    const LeadStatus = require("../model/leadStatus");
-    const isWonFilter = await LeadStatus.findOne({ _id: statusId, name: { $regex: /^won$/i } });
+    const isWonFilter = await LeadStatusModel.findOne({ _id: statusId, name: { $regex: /^won$/i } });
 
     if (isWonFilter) {
       const totalStats = await LEAD.aggregate([
@@ -806,6 +890,7 @@ exports.fetchKanbanLeadsByStatus = async (req, res) => {
       }
     });
   } catch (error) {
+    console.error("fetchKanbanLeadsByStatus error:", error);
     return res.status(500).json({
       status: "Fail",
       message: error.message,
@@ -995,6 +1080,18 @@ exports.getLeadCountSummary = async (req, res) => {
 
     if (andConditions.length > 0) {
       baseMatch.$and = andConditions;
+    }
+
+    const isBackOfficeUser = ((req.user?.role?.roleName || req.user?.role?.name || '') + '').toLowerCase().replace(/\s+/g, '').includes('backoffice');
+    if (isBackOfficeUser) {
+      const wonStatus = allStatuses.find(s => s.name.toLowerCase() === 'won');
+      const ProjectDetail = require("../model/projectDetail");
+      const filledDetails = await ProjectDetail.find({}).select('lead').lean();
+      const filledLeadIds = filledDetails.map(pd => pd.lead).filter(Boolean);
+      if (wonStatus) {
+        baseMatch.leadStatus = wonStatus._id;
+        baseMatch._id = { $in: filledLeadIds };
+      }
     }
 
 
@@ -1508,6 +1605,136 @@ exports.getWonLeads = async (req, res) => {
       status: "Fail",
       message: error.message,
     });
+  }
+};
+
+// ── Get Back Office Leads (WON Leads WITH filled Project Details) ──────────────
+exports.getBackOfficeLeads = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    const { search, staff, date } = req.query;
+
+    const ProjectDetail = require("../model/projectDetail");
+
+    // 1. Find Won status
+    const wonStatus = await LeadStatus.findOne({ name: { $regex: /won/i } });
+    if (!wonStatus) {
+      return res.status(200).json({
+        status: "Success",
+        message: "No won status found",
+        pagination: { totalRecords: 0, currentPage: page, totalPages: 0, limit },
+        data: [],
+      });
+    }
+
+    // 2. Find leads with project details filled (4 steps completed & saved)
+    const filledDetails = await ProjectDetail.find({
+      $or: [
+        { isFullyCompleted: true },
+        { paymentMode: { $exists: true, $ne: "" } },
+        { projectAmount: { $exists: true, $ne: null } },
+        { bankName: { $exists: true, $ne: "" } }
+      ]
+    }).select('lead').lean();
+    const filledLeadIds = filledDetails.map(pd => pd.lead).filter(Boolean);
+
+    // Query all WON leads with completed 4-step project details
+    const query = {
+      leadStatus: wonStatus._id,
+      _id: { $in: filledLeadIds },
+      isActive: true
+    };
+
+    if (req.leadScope === "own" && req.user && req.user._id) {
+      query.$or = [{ createdBy: req.user._id }, { assignedTo: req.user._id }];
+    }
+
+    // 🔥 SEARCH FILTER
+    if (search) {
+      query.$or = [
+        { fullName: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } },
+        { contact: { $regex: search, $options: "i" } },
+        { address: { $regex: search, $options: "i" } },
+        { kwRequirement: { $regex: search, $options: "i" } },
+        { discomName: { $regex: search, $options: "i" } },
+      ];
+    }
+
+    // 🔥 STAFF FILTER
+    if (staff) {
+      const staffArr = staff.split(',').filter(s => s.trim());
+      if (staffArr.length === 1) {
+        query.assignedTo = staffArr[0];
+      } else if (staffArr.length > 1) {
+        query.assignedTo = { $in: staffArr };
+      }
+    }
+
+    // 🔥 DATE FILTER
+    if (date) {
+      const start = new Date(date);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(date);
+      end.setHours(23, 59, 59, 999);
+      query.createdAt = { $gte: start, $lte: end };
+    }
+
+    const total = await LEAD.countDocuments(query);
+
+    const leads = await LEAD.find(query)
+      .populate("leadStatus")
+      .populate("assignedTo")
+      .populate("createdBy")
+      .populate("leadLabel")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean();
+
+    const leadIds = leads.map(l => l._id);
+    const allProjectDetails = await ProjectDetail.find({ lead: { $in: leadIds } }).lean();
+    const pdMap = {};
+    allProjectDetails.forEach(pd => {
+      pdMap[String(pd.lead)] = pd;
+    });
+
+    leads.forEach((l, index) => {
+      const pd = pdMap[String(l._id)] || null;
+      l.projectDetail = pd;
+      
+      // Auto-assign SR NO and Project Code if missing
+      const srNo = pd?.srNo || String((page - 1) * limit + index + 1);
+      const projectCode = pd?.projectCode || `GS${String((page - 1) * limit + index + 1).padStart(3, '0')}`;
+      
+      if (l.projectDetail) {
+        l.projectDetail.srNo = srNo;
+        l.projectDetail.projectCode = projectCode;
+      } else {
+        l.projectDetail = { srNo, projectCode };
+      }
+
+      l.projectAmount = pd ? (pd.projectAmount || 0) : 0;
+      l.pendingAmount = l.projectAmount - (l.paymentAmount || 0);
+    });
+
+    return res.status(200).json({
+      status: "Success",
+      message: "Back Office leads fetched successfully",
+      pagination: {
+        totalRecords: total,
+        currentPage: page,
+        totalPages: Math.ceil(total / limit),
+        limit,
+      },
+      data: leads,
+    });
+  } catch (error) {
+    console.error("getBackOfficeLeads error:", error);
+    return res.status(500).json({ status: "Fail", message: error.message });
   }
 };
 

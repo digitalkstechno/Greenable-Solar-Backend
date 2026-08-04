@@ -26,14 +26,17 @@ exports.upsertProjectDetail = async (req, res) => {
 
     // Parse body (text fields)
     const {
-      creatorName, customerFullName, registerMobileNumber, registrationPortal, panelType,
-      panelMake, panelWp, noOfPanel,
+      projectCode, srNo, salesPersonName, creatorName, customerFullName, registerMobileNumber,
+      locationLink, address, city, pincode, consumerNo, division, subDivision,
+      registrationPortal, panelType, panelMake, panelWp, noOfPanel,
       inverterMake, inverterKw, inverterPhase, installationRoof,
       discom, consumerConnectionType, elcbInstalled, elcbProvideBy,
       wiringType, homeFloor, walkway, walkwayLengthFeet,
       ladder, ladderLengthFeet, hdgiPipeMake,
       hdgiPipe80x40, hdgiPipe60x40, hdgiPipe40x40, hdgiPipe20x40PatiPipe,
-      paymentMode, projectAmount, subsidyLessProject, applyForLoan, loanPortal, totalKw
+      bankName, accountNo, ifscCode, branchName, accountHolderName,
+      paymentMode, projectAmount, subsidyLessProject, applyForLoan, loanPortal, totalKw,
+      downPaymentAmount, loanFirstPaymentAmount, loanSecondPaymentAmount
     } = req.body;
 
     // Map uploaded files by fieldname
@@ -44,10 +47,26 @@ exports.upsertProjectDetail = async (req, res) => {
       });
     }
 
+    // Auto-generate projectCode if needed
+    let finalProjectCode = projectCode;
+    if (!finalProjectCode) {
+      const existingDetail = await ProjectDetail.findOne({ lead: leadId });
+      if (existingDetail && existingDetail.projectCode) {
+        finalProjectCode = existingDetail.projectCode;
+      } else {
+        const count = await ProjectDetail.countDocuments({ projectCode: { $exists: true, $ne: "" } });
+        finalProjectCode = `GS${String(count + 1).padStart(3, '0')}`;
+      }
+    }
+
     const update = {
       lead: leadId,
-      creatorName, customerFullName, registerMobileNumber, registrationPortal, panelType,
-      panelMake,
+      projectCode: finalProjectCode,
+      srNo,
+      salesPersonName,
+      creatorName, customerFullName, registerMobileNumber,
+      locationLink, address, city, pincode, consumerNo, division, subDivision,
+      registrationPortal, panelType, panelMake,
       panelWp: panelWp ? Number(panelWp) : undefined,
       noOfPanel: noOfPanel ? Number(noOfPanel) : undefined,
       totalKw: totalKw ? Number(totalKw) : ((panelWp && noOfPanel) ? (Number(panelWp) * Number(noOfPanel)) / 1000 : undefined),
@@ -64,10 +83,15 @@ exports.upsertProjectDetail = async (req, res) => {
       hdgiPipe60x40: hdgiPipe60x40 !== undefined ? Number(hdgiPipe60x40) : undefined,
       hdgiPipe40x40: hdgiPipe40x40 !== undefined ? Number(hdgiPipe40x40) : undefined,
       hdgiPipe20x40PatiPipe: hdgiPipe20x40PatiPipe !== undefined ? Number(hdgiPipe20x40PatiPipe) : undefined,
+      bankName, accountNo, ifscCode, branchName, accountHolderName,
       paymentMode, subsidyLessProject,
       applyForLoan: applyForLoan !== undefined ? (applyForLoan === 'true' || applyForLoan === true) : undefined,
       loanPortal,
       projectAmount: projectAmount ? Number(projectAmount) : undefined,
+      downPaymentAmount: downPaymentAmount ? Number(downPaymentAmount) : undefined,
+      loanFirstPaymentAmount: loanFirstPaymentAmount ? Number(loanFirstPaymentAmount) : undefined,
+      loanSecondPaymentAmount: loanSecondPaymentAmount ? Number(loanSecondPaymentAmount) : undefined,
+      isFullyCompleted: true,
       createdBy: req.user?._id,
     };
 
@@ -89,6 +113,9 @@ exports.upsertProjectDetail = async (req, res) => {
       loanDocITRReturn: "loanDocITRReturn",
       loanDocPanCard: "loanDocPanCard",
       loanDocAadhaarCard: "loanDocAadhaarCard",
+      downPaymentDoc: "downPaymentDoc",
+      loanFirstPaymentDoc: "loanFirstPaymentDoc",
+      loanSecondPaymentDoc: "loanSecondPaymentDoc",
     };
 
     // Upload each file to external service
@@ -99,13 +126,17 @@ exports.upsertProjectDetail = async (req, res) => {
       }
     }
 
-    // Remove undefined keys so we don't overwrite existing data with undefined
-    Object.keys(update).forEach((k) => update[k] === undefined && delete update[k]);
+    // Remove undefined, empty string, or NaN keys so we don't overwrite existing data or trigger enum validation errors
+    Object.keys(update).forEach((k) => {
+      if (update[k] === undefined || update[k] === "" || (typeof update[k] === 'number' && isNaN(update[k]))) {
+        delete update[k];
+      }
+    });
 
     const detail = await ProjectDetail.findOneAndUpdate(
       { lead: leadId },
       { $set: update },
-      { new: true, upsert: true, runValidators: true }
+      { new: true, upsert: true, runValidators: false }
     ).populate("lead", "fullName contact email");
 
     return res.status(200).json({

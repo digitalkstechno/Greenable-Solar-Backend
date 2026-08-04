@@ -24,6 +24,7 @@ let {
   getDueFollowups,
   getMyDueFollowups,
   getWonLeads,
+  getBackOfficeLeads,
   getLostLeads,
   downloadAttachment,
   deleteAttachment,
@@ -77,6 +78,7 @@ router.get(
   getMyDueFollowups,
 );
 router.get("/won", authMiddleware, leadReadScope(), getWonLeads);
+router.get("/back-office", authMiddleware, leadReadScope(), getBackOfficeLeads);
 router.get("/lost", authMiddleware, leadReadScope(), getLostLeads);
 router.get("/export", authMiddleware, leadReadScope(), exportLeadsToExcel);
 //attachment download
