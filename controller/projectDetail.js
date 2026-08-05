@@ -36,7 +36,9 @@ exports.upsertProjectDetail = async (req, res) => {
       hdgiPipe80x40, hdgiPipe60x40, hdgiPipe40x40, hdgiPipe20x40PatiPipe,
       bankName, accountNo, ifscCode, branchName, accountHolderName,
       paymentMode, projectAmount, subsidyLessProject, applyForLoan, loanPortal, totalKw,
-      downPaymentAmount, loanFirstPaymentAmount, loanSecondPaymentAmount
+      downPaymentAmount, loanFirstPaymentAmount, loanSecondPaymentAmount,
+      meterChargeAmount, meterChargePayableBy, registrationDate, registrationNo, 
+      registrationName, documentFeasibilityDate, registrationDone, meterPaymentDone
     } = req.body;
 
     // Map uploaded files by fieldname
@@ -91,6 +93,9 @@ exports.upsertProjectDetail = async (req, res) => {
       downPaymentAmount: downPaymentAmount ? Number(downPaymentAmount) : undefined,
       loanFirstPaymentAmount: loanFirstPaymentAmount ? Number(loanFirstPaymentAmount) : undefined,
       loanSecondPaymentAmount: loanSecondPaymentAmount ? Number(loanSecondPaymentAmount) : undefined,
+      meterChargeAmount: meterChargeAmount !== undefined ? Number(meterChargeAmount) : undefined,
+      meterChargePayableBy, registrationDate, registrationNo,
+      registrationName, documentFeasibilityDate, registrationDone, meterPaymentDone,
       isFullyCompleted: true,
       createdBy: req.user?._id,
     };

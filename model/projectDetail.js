@@ -62,6 +62,16 @@ const ProjectDetailSchema = new Schema(
     hdgiPipe40x40: { type: Number, default: 0 },
     hdgiPipe20x40PatiPipe: { type: Number, default: 0 },
 
+    // ── Registration & Feasibility ──────────────────────────────────────────
+    meterChargeAmount: { type: Number },
+    meterChargePayableBy: { type: String },
+    registrationDate: { type: String },
+    registrationNo: { type: String },
+    registrationName: { type: String },
+    documentFeasibilityDate: { type: String },
+    registrationDone: { type: String },
+    meterPaymentDone: { type: String },
+
     // ── Bank and Payment Details ──────────────────────────────────────────────
     bankName: { type: String },
     accountNo: { type: String },
