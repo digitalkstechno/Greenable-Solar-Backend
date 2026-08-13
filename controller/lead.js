@@ -157,7 +157,9 @@ exports.fetchAllLeads = async (req, res) => {
     const mongoose = require("mongoose");
     const LeadStatusModel = require("../model/leadStatus");
     const userRoleStr = (typeof req.user?.role === 'string' ? req.user.role : (req.user?.role?.roleName || req.user?.role?.name || '')).toLowerCase().replace(/\s+/g, '');
-    const isBackOfficeUser = userRoleStr.includes('backoffice');
+    const userDeptStr = (typeof req.user?.department === 'string' ? req.user.department : (req.user?.department?.roleName || req.user?.department?.name || '')).toLowerCase().replace(/\s+/g, '');
+    const isBackOfficeUser = userRoleStr.includes('backoffice') || userDeptStr.includes('backoffice');
+    const isExecutiveUser = userRoleStr.includes('executive') || userDeptStr.includes('executive');
     if (isBackOfficeUser) {
       const wonStatuses = await LeadStatusModel.find({ name: { $regex: /won/i } });
       const ProjectDetail = require("../model/projectDetail");
@@ -168,6 +170,23 @@ exports.fetchAllLeads = async (req, res) => {
           { projectAmount: { $exists: true, $ne: null } },
           { bankName: { $exists: true, $ne: "" } }
         ]
+      }).select('lead').lean();
+      const filledLeadIds = filledDetails
+        .map(pd => pd.lead)
+        .filter(Boolean)
+        .map(id => (typeof id === 'string' ? new mongoose.Types.ObjectId(id) : id));
+      if (wonStatuses.length > 0) {
+        query.leadStatus = { $in: wonStatuses.map(s => s._id) };
+        query._id = { $in: filledLeadIds };
+      }
+    } else if (isExecutiveUser) {
+      const wonStatuses = await LeadStatusModel.find({ name: { $regex: /won/i } });
+      const ProjectDetail = require("../model/projectDetail");
+      const filledDetails = await ProjectDetail.find({
+        isFullyCompleted: true,
+        city: { $exists: true, $ne: "" },
+        pincode: { $exists: true, $ne: "" },
+        division: { $exists: true, $ne: "" }
       }).select('lead').lean();
       const filledLeadIds = filledDetails
         .map(pd => pd.lead)
@@ -644,11 +663,31 @@ exports.fetchLeadsForKanban = async (req, res) => {
     }
 
     // 🔥 STATUS FILTER (handle comma-separated values)
-    const isBackOfficeUser = (req.user?.role?.roleName || '').toLowerCase().replace(/\s+/g, '').includes('backoffice');
+    const userRoleStrKanban = (req.user?.role?.roleName || req.user?.role || '').toLowerCase().replace(/\s+/g, '');
+    const userDeptStrKanban = (req.user?.department?.roleName || req.user?.department?.name || req.user?.department || '').toLowerCase().replace(/\s+/g, '');
+    const isBackOfficeUser = userRoleStrKanban.includes('backoffice') || userDeptStrKanban.includes('backoffice');
+    const isExecutiveUser = userRoleStrKanban.includes('executive') || userDeptStrKanban.includes('executive');
     if (isBackOfficeUser) {
       const wonStatus = await LeadStatus.findOne({ name: { $regex: /won/i } });
       const ProjectDetail = require("../model/projectDetail");
       const filledDetails = await ProjectDetail.find({}).select('lead').lean();
+      const filledLeadIds = filledDetails
+        .map(pd => pd.lead)
+        .filter(Boolean)
+        .map(id => (typeof id === 'string' ? new mongoose.Types.ObjectId(id) : id));
+      if (wonStatus) {
+        match.leadStatus = wonStatus._id;
+        match._id = { $in: filledLeadIds };
+      }
+    } else if (isExecutiveUser) {
+      const wonStatus = await LeadStatus.findOne({ name: { $regex: /won/i } });
+      const ProjectDetail = require("../model/projectDetail");
+      const filledDetails = await ProjectDetail.find({
+        isFullyCompleted: true,
+        city: { $exists: true, $ne: "" },
+        pincode: { $exists: true, $ne: "" },
+        division: { $exists: true, $ne: "" }
+      }).select('lead').lean();
       const filledLeadIds = filledDetails
         .map(pd => pd.lead)
         .filter(Boolean)
@@ -1082,11 +1121,28 @@ exports.getLeadCountSummary = async (req, res) => {
       baseMatch.$and = andConditions;
     }
 
-    const isBackOfficeUser = ((req.user?.role?.roleName || req.user?.role?.name || '') + '').toLowerCase().replace(/\s+/g, '').includes('backoffice');
+    const userRoleStrSummary = ((req.user?.role?.roleName || req.user?.role?.name || req.user?.role || '') + '').toLowerCase().replace(/\s+/g, '');
+    const userDeptStrSummary = ((req.user?.department?.roleName || req.user?.department?.name || req.user?.department || '') + '').toLowerCase().replace(/\s+/g, '');
+    const isBackOfficeUser = userRoleStrSummary.includes('backoffice') || userDeptStrSummary.includes('backoffice');
+    const isExecutiveUser = userRoleStrSummary.includes('executive') || userDeptStrSummary.includes('executive');
     if (isBackOfficeUser) {
       const wonStatus = allStatuses.find(s => s.name.toLowerCase() === 'won');
       const ProjectDetail = require("../model/projectDetail");
       const filledDetails = await ProjectDetail.find({}).select('lead').lean();
+      const filledLeadIds = filledDetails.map(pd => pd.lead).filter(Boolean);
+      if (wonStatus) {
+        baseMatch.leadStatus = wonStatus._id;
+        baseMatch._id = { $in: filledLeadIds };
+      }
+    } else if (isExecutiveUser) {
+      const wonStatus = allStatuses.find(s => s.name.toLowerCase() === 'won');
+      const ProjectDetail = require("../model/projectDetail");
+      const filledDetails = await ProjectDetail.find({
+        isFullyCompleted: true,
+        city: { $exists: true, $ne: "" },
+        pincode: { $exists: true, $ne: "" },
+        division: { $exists: true, $ne: "" }
+      }).select('lead').lean();
       const filledLeadIds = filledDetails.map(pd => pd.lead).filter(Boolean);
       if (wonStatus) {
         baseMatch.leadStatus = wonStatus._id;
@@ -1881,17 +1937,12 @@ exports.getExecutiveLeads = async (req, res) => {
       });
     }
 
-    // 2. Find leads where Back Office has filled required data
+    // 2. Find leads where Back Office has completed and saved Project Details
     const filledDetails = await ProjectDetail.find({
-      $or: [
-        { isFullyCompleted: true },
-        { registrationPortal: { $exists: true, $ne: "" } },
-        { panelMake: { $exists: true, $ne: "" } },
-        { inverterMake: { $exists: true, $ne: "" } },
-        { discom: { $exists: true, $ne: "" } },
-        { projectAmount: { $exists: true, $ne: null } },
-        { paymentMode: { $exists: true, $ne: "" } }
-      ]
+      isFullyCompleted: true,
+      city: { $exists: true, $ne: "" },
+      pincode: { $exists: true, $ne: "" },
+      division: { $exists: true, $ne: "" }
     }).select('lead').lean();
 
     const filledLeadIds = filledDetails.map(pd => pd.lead).filter(Boolean);

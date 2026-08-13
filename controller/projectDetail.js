@@ -48,7 +48,7 @@ exports.upsertProjectDetail = async (req, res) => {
       finalPanelMake, finalPanelWp, finalNoOfPanel, finalProjectKw, finalInverterMake, finalInverterKw,
       intimationDate, intimationRejectDate, intimationRejectReason, meterInstolationDate, intimationApprovalDate,
       subsidyRedeem, subsidyRedeemName, subsidyAmount, subsidyDisbusmentDate,
-      makeInvoice, consumerFile, currentDepartment
+      makeInvoice, consumerFile, currentDepartment, isFullyCompleted
     } = req.body;
 
     // Map uploaded files by fieldname
@@ -59,16 +59,33 @@ exports.upsertProjectDetail = async (req, res) => {
       });
     }
 
+    const existingDetail = await ProjectDetail.findOne({ lead: leadId });
+
     // Auto-generate projectCode if needed
     let finalProjectCode = projectCode;
     if (!finalProjectCode) {
-      const existingDetail = await ProjectDetail.findOne({ lead: leadId });
       if (existingDetail && existingDetail.projectCode) {
         finalProjectCode = existingDetail.projectCode;
       } else {
         const count = await ProjectDetail.countDocuments({ projectCode: { $exists: true, $ne: "" } });
         finalProjectCode = `GS${String(count + 1).padStart(3, '0')}`;
       }
+    }
+
+    let finalCompleted = false;
+    if (isFullyCompleted !== undefined) {
+      finalCompleted = (isFullyCompleted === 'true' || isFullyCompleted === true);
+    } else if (existingDetail && existingDetail.isFullyCompleted !== undefined) {
+      finalCompleted = existingDetail.isFullyCompleted;
+    }
+
+    // Double check mandatory fields before marking completed
+    const reqPanelMake = panelMake || (existingDetail && existingDetail.panelMake);
+    const reqInverterMake = inverterMake || (existingDetail && existingDetail.inverterMake);
+    const reqProjectAmount = projectAmount || (existingDetail && existingDetail.projectAmount);
+    const reqPaymentMode = paymentMode || (existingDetail && existingDetail.paymentMode);
+    if (!reqPanelMake || !reqInverterMake || !reqProjectAmount || !reqPaymentMode) {
+      finalCompleted = false;
     }
 
     const update = {
@@ -129,7 +146,7 @@ exports.upsertProjectDetail = async (req, res) => {
       subsidyAmount: subsidyAmount ? Number(subsidyAmount) : undefined,
       subsidyDisbusmentDate,
       makeInvoice, consumerFile, currentDepartment,
-      isFullyCompleted: true,
+      isFullyCompleted: finalCompleted,
       createdBy: req.user?._id,
     };
 
