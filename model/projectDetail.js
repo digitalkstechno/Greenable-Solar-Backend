@@ -87,6 +87,21 @@ const ProjectDetailSchema = new Schema(
     photoEarthingLocation: fileSchema,
     photoMeterBox: fileSchema,
 
+    // Image 1: Required Photos for Installation
+    photoSiteOverview: fileSchema,
+    photoPanelSrNo: fileSchema,
+    photoInverterSrNo: fileSchema,
+    photoPanelPlacement: fileSchema,
+    photoMountingStructure: fileSchema,
+    photoInverterInstalled: fileSchema,
+    photoAcdbDcdb: fileSchema,
+    photoEarthingConnection: fileSchema,
+    photoCableWiringRoute1: fileSchema,
+    photoCableWiringRoute2: fileSchema,
+    photoCableWiringRoute3: fileSchema,
+    photoEarthingPit: fileSchema,
+    photoJioTagCustomer: fileSchema,
+
     // ── Required Documents for Registration ─────────────────────────────────
     docLatestLightBill: fileSchema,
     docLatestTaxBill: fileSchema,
@@ -117,6 +132,69 @@ const ProjectDetailSchema = new Schema(
     loanDocAadhaarCard: fileSchema,
 
     isFullyCompleted: { type: Boolean, default: false },
+
+    isExecutiveVerified: { type: Boolean, default: false },
+    executiveVerifiedAt: { type: Date },
+    executiveVerifiedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Staff",
+    },
+
+    // ── Installation Details (After Executive Verification) ────────────────
+    installationStatus: { type: String, default: "Pending" },
+    installationDate: { type: String },
+    pipeDispatchDate: { type: String },
+    pipeDispatchNote: { type: String },
+    panelDispatchDate: { type: String },
+    panelDispatchNote: { type: String },
+    fabricationDate: { type: String },
+    fabricationTeamName: { type: String },
+    fabricationNote: { type: String },
+    wiringDate: { type: String },
+    wiringTeamName: { type: String },
+    wiringNote: { type: String },
+    elcbStatus: { type: String, default: "Pending" },
+    elcbNote: { type: String },
+    giPipe80x40Consumption: { type: Number },
+    giPipe60x40Consumption: { type: Number },
+    giPipe40x40Consumption: { type: Number },
+    giPipe20x40PatiPipeConsumption: { type: Number },
+    giPipeConsumptionNote: { type: String },
+
+    // ── Meter File Details (Image 2) ────────────────────────────────────────
+    meterFileMakeDate: { type: String },
+    meterFileRegDate: { type: String },
+    meterFileMakePersonName: { type: String },
+    dcrReportNo: { type: String },
+    docDcrReport: fileSchema,
+    dcrDate: { type: String },
+
+    // ── After Installation Final Data (Image 2) ──────────────────────────────
+    finalPanelMake: { type: String },
+    finalPanelWp: { type: Number },
+    finalNoOfPanel: { type: Number },
+    finalProjectKw: { type: Number },
+    finalInverterMake: { type: String },
+    finalInverterKw: { type: Number },
+    docPanelInverterSrNo: fileSchema,
+
+    // ── Intimation and Subsidy (Image 2) ────────────────────────────────────
+    intimationDate: { type: String },
+    intimationRejectDate: { type: String },
+    intimationRejectReason: { type: String },
+    meterInstolationDate: { type: String },
+    intimationApprovalDate: { type: String },
+    subsidyRedeem: { type: String },
+    subsidyRedeemName: { type: String },
+    subsidyAmount: { type: Number },
+    subsidyDisbusmentDate: { type: String },
+
+    // ── Invoice & Warranty / Account Department Flow (Image 2) ───────────────
+    makeInvoice: { type: String, default: "NO" },
+    docInvoice: fileSchema,
+    docWarrantyCertificate: fileSchema,
+    consumerFile: { type: String, default: "PENDING" },
+    currentDepartment: { type: String, default: "Project Back Office" },
 
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,

@@ -25,6 +25,8 @@ let {
   getMyDueFollowups,
   getWonLeads,
   getBackOfficeLeads,
+  getExecutiveLeads,
+  getAccountLeads,
   getLostLeads,
   downloadAttachment,
   deleteAttachment,
@@ -79,6 +81,8 @@ router.get(
 );
 router.get("/won", authMiddleware, leadReadScope(), getWonLeads);
 router.get("/back-office", authMiddleware, leadReadScope(), getBackOfficeLeads);
+router.get("/executive-leads", authMiddleware, leadReadScope(), getExecutiveLeads);
+router.get("/account-leads", authMiddleware, leadReadScope(), getAccountLeads);
 router.get("/lost", authMiddleware, leadReadScope(), getLostLeads);
 router.get("/export", authMiddleware, leadReadScope(), exportLeadsToExcel);
 //attachment download

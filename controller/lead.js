@@ -1738,6 +1738,247 @@ exports.getBackOfficeLeads = async (req, res) => {
   }
 };
 
+// ── Get Account Department Leads (WON Leads WITH filled Installation Data in Back Office) ──
+exports.getAccountLeads = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    const { search, staff, date } = req.query;
+
+    const ProjectDetail = require("../model/projectDetail");
+
+    // 1. Find Won status
+    const wonStatus = await LeadStatus.findOne({ name: { $regex: /won/i } });
+    if (!wonStatus) {
+      return res.status(200).json({
+        status: "Success",
+        message: "No won status found",
+        pagination: { totalRecords: 0, currentPage: page, totalPages: 0, limit },
+        data: [],
+      });
+    }
+
+    // 2. Find leads where Back Office has filled installation data
+    const filledDetails = await ProjectDetail.find({
+      $or: [
+        { installationStatus: "Done" },
+        { meterFileMakeDate: { $exists: true, $ne: "" } },
+        { finalPanelMake: { $exists: true, $ne: "" } },
+        { installationDate: { $exists: true, $ne: "" } },
+        { currentDepartment: "Account Department" },
+        { docDcrReport: { $exists: true, $ne: null } },
+        { docPanelInverterSrNo: { $exists: true, $ne: null } },
+      ]
+    }).select('lead').lean();
+
+    const filledLeadIds = filledDetails.map(pd => pd.lead).filter(Boolean);
+
+    // Query WON leads matching installation-filled leads
+    const query = {
+      leadStatus: wonStatus._id,
+      _id: { $in: filledLeadIds },
+      isActive: true
+    };
+
+    if (req.leadScope === "own" && req.user && req.user._id) {
+      query.$or = [{ createdBy: req.user._id }, { assignedTo: req.user._id }];
+    }
+
+    if (search) {
+      query.$or = [
+        { fullName: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } },
+        { contact: { $regex: search, $options: "i" } },
+        { address: { $regex: search, $options: "i" } },
+        { kwRequirement: { $regex: search, $options: "i" } },
+        { discomName: { $regex: search, $options: "i" } },
+      ];
+    }
+
+    if (staff) {
+      const staffArr = staff.split(',').filter(s => s.trim());
+      if (staffArr.length === 1) {
+        query.assignedTo = staffArr[0];
+      } else if (staffArr.length > 1) {
+        query.assignedTo = { $in: staffArr };
+      }
+    }
+
+    if (date) {
+      const start = new Date(date);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(date);
+      end.setHours(23, 59, 59, 999);
+      query.createdAt = { $gte: start, $lte: end };
+    }
+
+    const total = await LEAD.countDocuments(query);
+
+    const leads = await LEAD.find(query)
+      .populate("leadStatus")
+      .populate("assignedTo")
+      .populate("createdBy")
+      .populate("leadLabel")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean();
+
+    const leadIds = leads.map(l => l._id);
+    const allProjectDetails = await ProjectDetail.find({ lead: { $in: leadIds } }).lean();
+    const pdMap = {};
+    allProjectDetails.forEach(pd => {
+      pdMap[String(pd.lead)] = pd;
+    });
+
+    leads.forEach((l, index) => {
+      const pd = pdMap[String(l._id)] || null;
+      l.projectDetail = pd;
+      l.srNo = pd?.srNo || String((page - 1) * limit + index + 1);
+      l.projectCode = pd?.projectCode || `GS${String(index + 1).padStart(3, '0')}`;
+      l.projectAmount = pd ? (pd.projectAmount || 0) : 0;
+      l.pendingAmount = l.projectAmount - (l.paymentAmount || 0);
+    });
+
+    return res.status(200).json({
+      status: "Success",
+      message: "Account Department leads fetched successfully",
+      pagination: {
+        totalRecords: total,
+        currentPage: page,
+        totalPages: Math.ceil(total / limit),
+        limit,
+      },
+      data: leads,
+    });
+  } catch (error) {
+    console.error("getAccountLeads error:", error);
+    return res.status(500).json({ status: "Fail", message: error.message });
+  }
+};
+
+// ── Get Executive Department Leads (WON Leads WITH filled Back Office Data) ──
+exports.getExecutiveLeads = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 100;
+    const skip = (page - 1) * limit;
+
+    const { search, staff, date } = req.query;
+
+    const ProjectDetail = require("../model/projectDetail");
+
+    // 1. Find Won status
+    const wonStatus = await LeadStatus.findOne({ name: { $regex: /won/i } });
+    if (!wonStatus) {
+      return res.status(200).json({
+        status: "Success",
+        message: "No won status found",
+        pagination: { totalRecords: 0, currentPage: page, totalPages: 0, limit },
+        data: [],
+      });
+    }
+
+    // 2. Find leads where Back Office has filled required data
+    const filledDetails = await ProjectDetail.find({
+      $or: [
+        { isFullyCompleted: true },
+        { registrationPortal: { $exists: true, $ne: "" } },
+        { panelMake: { $exists: true, $ne: "" } },
+        { inverterMake: { $exists: true, $ne: "" } },
+        { discom: { $exists: true, $ne: "" } },
+        { projectAmount: { $exists: true, $ne: null } },
+        { paymentMode: { $exists: true, $ne: "" } }
+      ]
+    }).select('lead').lean();
+
+    const filledLeadIds = filledDetails.map(pd => pd.lead).filter(Boolean);
+
+    const query = {
+      leadStatus: wonStatus._id,
+      _id: { $in: filledLeadIds },
+      isActive: true
+    };
+
+    if (req.leadScope === "own" && req.user && req.user._id) {
+      query.$or = [{ createdBy: req.user._id }, { assignedTo: req.user._id }];
+    }
+
+    if (search) {
+      query.$or = [
+        { fullName: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } },
+        { contact: { $regex: search, $options: "i" } },
+        { address: { $regex: search, $options: "i" } },
+        { kwRequirement: { $regex: search, $options: "i" } },
+        { discomName: { $regex: search, $options: "i" } },
+      ];
+    }
+
+    if (staff) {
+      const staffArr = staff.split(',').filter(s => s.trim());
+      if (staffArr.length === 1) {
+        query.assignedTo = staffArr[0];
+      } else if (staffArr.length > 1) {
+        query.assignedTo = { $in: staffArr };
+      }
+    }
+
+    if (date) {
+      const start = new Date(date);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(date);
+      end.setHours(23, 59, 59, 999);
+      query.createdAt = { $gte: start, $lte: end };
+    }
+
+    const total = await LEAD.countDocuments(query);
+
+    const leads = await LEAD.find(query)
+      .populate("leadStatus")
+      .populate("assignedTo")
+      .populate("createdBy")
+      .populate("leadLabel")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean();
+
+    const leadIds = leads.map(l => l._id);
+    const allProjectDetails = await ProjectDetail.find({ lead: { $in: leadIds } }).lean();
+    const pdMap = {};
+    allProjectDetails.forEach(pd => {
+      pdMap[String(pd.lead)] = pd;
+    });
+
+    leads.forEach((l, index) => {
+      const pd = pdMap[String(l._id)] || null;
+      l.projectDetail = pd;
+      l.srNo = pd?.srNo || String((page - 1) * limit + index + 1);
+      l.projectCode = pd?.projectCode || `GS${String(index + 1).padStart(3, '0')}`;
+      l.projectAmount = pd ? (pd.projectAmount || 0) : 0;
+      l.pendingAmount = l.projectAmount - (l.paymentAmount || 0);
+    });
+
+    return res.status(200).json({
+      status: "Success",
+      message: "Executive Department leads fetched successfully",
+      pagination: {
+        totalRecords: total,
+        currentPage: page,
+        totalPages: Math.ceil(total / limit),
+        limit,
+      },
+      data: leads,
+    });
+  } catch (error) {
+    console.error("getExecutiveLeads error:", error);
+    return res.status(500).json({ status: "Fail", message: error.message });
+  }
+};
+
 // Get Lost Leads
 exports.getLostLeads = async (req, res) => {
   try {

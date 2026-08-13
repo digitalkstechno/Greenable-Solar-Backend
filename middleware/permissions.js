@@ -15,16 +15,27 @@ function authorize(feature, action) {
       return res.status(403).json({ status: "Fail", message: "Access denied" });
     }
 
-    
-    if (user.role.roleName && user.role.roleName.toLowerCase() === 'super admin') {
+    const roleName = (user.role.roleName || "").toLowerCase();
+    const deptName = (user.department?.name || user.department || "").toString().toLowerCase();
+
+    // Super Admin, Admin, Back Office, Project Back Office, and Account Department always have permission
+    if (
+      roleName.includes('super admin') ||
+      roleName.includes('admin') ||
+      roleName.includes('back office') ||
+      roleName.includes('account') ||
+      roleName.includes('project') ||
+      deptName.includes('back office') ||
+      deptName.includes('account') ||
+      deptName.includes('project')
+    ) {
       return next();
     }
 
     const perms = getRolePermissions(user.role);
     const featurePerms = perms[feature];
 
-  
-    if (featurePerms && featurePerms[action] == true) {
+    if (featurePerms && (featurePerms[action] == true || featurePerms.readAll == true || featurePerms.readOwn == true)) {
       return next();
     }
 

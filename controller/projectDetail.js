@@ -38,7 +38,17 @@ exports.upsertProjectDetail = async (req, res) => {
       paymentMode, projectAmount, subsidyLessProject, applyForLoan, loanPortal, totalKw,
       downPaymentAmount, loanFirstPaymentAmount, loanSecondPaymentAmount,
       meterChargeAmount, meterChargePayableBy, registrationDate, registrationNo, 
-      registrationName, documentFeasibilityDate, registrationDone, meterPaymentDone
+      registrationName, documentFeasibilityDate, registrationDone, meterPaymentDone,
+      installationStatus, installationDate, pipeDispatchDate, pipeDispatchNote,
+      panelDispatchDate, panelDispatchNote, fabricationDate, fabricationTeamName,
+      fabricationNote, wiringDate, wiringTeamName, wiringNote, elcbStatus, elcbNote,
+      giPipe80x40Consumption, giPipe60x40Consumption, giPipe40x40Consumption,
+      giPipe20x40PatiPipeConsumption, giPipeConsumptionNote,
+      meterFileMakeDate, meterFileRegDate, meterFileMakePersonName, dcrReportNo, dcrDate,
+      finalPanelMake, finalPanelWp, finalNoOfPanel, finalProjectKw, finalInverterMake, finalInverterKw,
+      intimationDate, intimationRejectDate, intimationRejectReason, meterInstolationDate, intimationApprovalDate,
+      subsidyRedeem, subsidyRedeemName, subsidyAmount, subsidyDisbusmentDate,
+      makeInvoice, consumerFile, currentDepartment
     } = req.body;
 
     // Map uploaded files by fieldname
@@ -96,6 +106,29 @@ exports.upsertProjectDetail = async (req, res) => {
       meterChargeAmount: meterChargeAmount !== undefined ? Number(meterChargeAmount) : undefined,
       meterChargePayableBy, registrationDate, registrationNo,
       registrationName, documentFeasibilityDate, registrationDone, meterPaymentDone,
+      installationStatus, installationDate, pipeDispatchDate, pipeDispatchNote,
+      panelDispatchDate, panelDispatchNote, fabricationDate, fabricationTeamName,
+      fabricationNote, wiringDate, wiringTeamName, wiringNote, elcbStatus, elcbNote,
+      giPipe80x40Consumption: giPipe80x40Consumption !== undefined ? Number(giPipe80x40Consumption) : undefined,
+      giPipe60x40Consumption: giPipe60x40Consumption !== undefined ? Number(giPipe60x40Consumption) : undefined,
+      giPipe40x40Consumption: giPipe40x40Consumption !== undefined ? Number(giPipe40x40Consumption) : undefined,
+      giPipe20x40PatiPipeConsumption: giPipe20x40PatiPipeConsumption !== undefined ? Number(giPipe20x40PatiPipeConsumption) : undefined,
+      giPipeConsumptionNote,
+      meterFileMakeDate, meterFileRegDate,
+      meterFileMakePersonName: meterFileMakePersonName || (req.user ? (req.user.fullName || req.user.name) : undefined),
+      dcrReportNo, dcrDate,
+      finalPanelMake: finalPanelMake || panelMake,
+      finalPanelWp: finalPanelWp ? Number(finalPanelWp) : (panelWp ? Number(panelWp) : undefined),
+      finalNoOfPanel: finalNoOfPanel ? Number(finalNoOfPanel) : (noOfPanel ? Number(noOfPanel) : undefined),
+      finalProjectKw: finalProjectKw ? Number(finalProjectKw) : (totalKw ? Number(totalKw) : undefined),
+      finalInverterMake: finalInverterMake || inverterMake,
+      finalInverterKw: finalInverterKw ? Number(finalInverterKw) : (inverterKw ? Number(inverterKw) : undefined),
+      intimationDate, intimationRejectDate, intimationRejectReason, meterInstolationDate, intimationApprovalDate,
+      subsidyRedeem,
+      subsidyRedeemName: subsidyRedeemName || (req.user ? (req.user.fullName || req.user.name) : undefined),
+      subsidyAmount: subsidyAmount ? Number(subsidyAmount) : undefined,
+      subsidyDisbusmentDate,
+      makeInvoice, consumerFile, currentDepartment,
       isFullyCompleted: true,
       createdBy: req.user?._id,
     };
@@ -108,6 +141,19 @@ exports.upsertProjectDetail = async (req, res) => {
       photoInverterLocation: "photoInverterLocation",
       photoEarthingLocation: "photoEarthingLocation",
       photoMeterBox: "photoMeterBox",
+      photoSiteOverview: "photoSiteOverview",
+      photoPanelSrNo: "photoPanelSrNo",
+      photoInverterSrNo: "photoInverterSrNo",
+      photoPanelPlacement: "photoPanelPlacement",
+      photoMountingStructure: "photoMountingStructure",
+      photoInverterInstalled: "photoInverterInstalled",
+      photoAcdbDcdb: "photoAcdbDcdb",
+      photoEarthingConnection: "photoEarthingConnection",
+      photoCableWiringRoute1: "photoCableWiringRoute1",
+      photoCableWiringRoute2: "photoCableWiringRoute2",
+      photoCableWiringRoute3: "photoCableWiringRoute3",
+      photoEarthingPit: "photoEarthingPit",
+      photoJioTagCustomer: "photoJioTagCustomer",
       docLatestLightBill: "docLatestLightBill",
       docLatestTaxBill: "docLatestTaxBill",
       docCancelCheck: "docCancelCheck",
@@ -121,6 +167,10 @@ exports.upsertProjectDetail = async (req, res) => {
       downPaymentDoc: "downPaymentDoc",
       loanFirstPaymentDoc: "loanFirstPaymentDoc",
       loanSecondPaymentDoc: "loanSecondPaymentDoc",
+      docDcrReport: "docDcrReport",
+      docPanelInverterSrNo: "docPanelInverterSrNo",
+      docInvoice: "docInvoice",
+      docWarrantyCertificate: "docWarrantyCertificate",
     };
 
     // Upload each file to external service
@@ -161,10 +211,9 @@ exports.getProjectDetail = async (req, res) => {
     const { leadId } = req.params;
     const { qIdx, optIdx = '0' } = req.query;
 
-    const detail = await ProjectDetail.findOne({ lead: leadId }).populate(
-      "lead",
-      "fullName contact email quotations"
-    );
+    const detail = await ProjectDetail.findOne({ lead: leadId })
+      .populate("lead", "fullName contact email quotations")
+      .populate("executiveVerifiedBy", "fullName email");
 
     if (detail) {
       const dataObj = detail.toObject ? detail.toObject() : detail;
@@ -242,3 +291,39 @@ exports.getProjectDetail = async (req, res) => {
     return res.status(500).json({ status: "Error", message: error.message });
   }
 };
+
+// ── Verify Executive (Mark Lead / Project as Verified by Executive) ─────────
+exports.verifyExecutive = async (req, res) => {
+  try {
+    const { leadId } = req.params;
+
+    const lead = await Lead.findById(leadId);
+    if (!lead) {
+      return res.status(404).json({ status: "Error", message: "Lead not found" });
+    }
+
+    const detail = await ProjectDetail.findOneAndUpdate(
+      { lead: leadId },
+      {
+        $set: {
+          lead: leadId,
+          isExecutiveVerified: true,
+          executiveVerifiedAt: new Date(),
+          executiveVerifiedBy: req.user?._id,
+        },
+      },
+      { new: true, upsert: true, runValidators: false }
+    ).populate("lead", "fullName contact email")
+     .populate("executiveVerifiedBy", "fullName email");
+
+    return res.status(200).json({
+      status: "Success",
+      message: "Lead successfully verified by Executive",
+      data: detail,
+    });
+  } catch (error) {
+    console.error("verifyExecutive error:", error);
+    return res.status(500).json({ status: "Error", message: error.message });
+  }
+};
+
